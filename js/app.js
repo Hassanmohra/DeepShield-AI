@@ -2,39 +2,56 @@
 
 /*
  * DeepShield AI
- * Client-side media analysis controller
+ * Client-side Media Forensics Engine
+ *
+ * Version: 0.2
  *
  * Features:
- * - File selection
- * - Custom upload button support
- * - Upload area click support
+ * - Image / video upload
  * - Drag & drop
  * - File validation
- * - Media metadata inspection
- * - Local forensic indicators
- * - Analysis report generation
+ * - Real image pixel analysis
+ * - Luminance statistics
+ * - Color distribution
+ * - Saturation analysis
+ * - Entropy estimation
+ * - Edge / sharpness estimation
+ * - Noise estimation
+ * - Compression / blockiness estimation
+ * - Deterministic forensic anomaly score
+ *
+ * IMPORTANT:
+ * This is a heuristic forensic analyzer.
+ * It is NOT a trained Deep Learning deepfake detector.
  */
 
 document.addEventListener("DOMContentLoaded", () => {
 
-    /* ==============================
+    /* =========================================================
        DOM ELEMENTS
-    ============================== */
+    ========================================================= */
 
-    const fileInput = document.getElementById("fileInput");
-    const dropZone = document.getElementById("dropZone");
-    const fileSelected = document.getElementById("fileSelected");
-    const scanButton = document.getElementById("scanButton");
+    const fileInput =
+        document.getElementById("fileInput");
 
-    const resultEmpty = document.getElementById("resultEmpty");
-    const analysisResult = document.getElementById("analysisResult");
-    const scoreElement = document.getElementById("score");
+    const dropZone =
+        document.getElementById("dropZone");
 
-    /*
-     * Try to find the visible upload button.
-     * This supports several common IDs/classes
-     * without requiring changes to index.html.
-     */
+    const fileSelected =
+        document.getElementById("fileSelected");
+
+    const scanButton =
+        document.getElementById("scanButton");
+
+    const resultEmpty =
+        document.getElementById("resultEmpty");
+
+    const analysisResult =
+        document.getElementById("analysisResult");
+
+    const scoreElement =
+        document.getElementById("score");
+
 
     const chooseMediaButton =
         document.getElementById("chooseMedia") ||
@@ -46,9 +63,9 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelector(".browse-button");
 
 
-    /* ==============================
+    /* =========================================================
        REQUIRED ELEMENT CHECK
-    ============================== */
+    ========================================================= */
 
     if (!fileInput) {
 
@@ -60,27 +77,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    if (!dropZone) {
-
-        console.warn(
-            "DeepShield AI: #dropZone was not found."
-        );
-
-    }
-
-
-    if (!scanButton) {
-
-        console.warn(
-            "DeepShield AI: #scanButton was not found."
-        );
-
-    }
-
-
-    /* ==============================
+    /* =========================================================
        CONFIGURATION
-    ============================== */
+    ========================================================= */
 
     const CONFIG = {
 
@@ -111,46 +110,45 @@ document.addEventListener("DOMContentLoaded", () => {
             ".webm",
             ".mov",
             ".avi"
-        ]
+        ],
+
+        /*
+         * Images are resized for analysis.
+         * This keeps browser processing fast.
+         */
+
+        analysisMaxDimension: 420,
+
+        /*
+         * Number of pixels used in detailed
+         * calculations.
+         */
+
+        maxAnalysisPixels: 170000
 
     };
 
 
-    /* ==============================
+    /* =========================================================
        STATE
-    ============================== */
+    ========================================================= */
 
     let selectedFile = null;
+
     let analysisInProgress = false;
 
 
-    /* ==============================
-       OPEN FILE SELECTOR
-    ============================== */
+    /* =========================================================
+       FILE SELECTOR
+    ========================================================= */
 
     function openFileSelector(event) {
 
-        /*
-         * Prevent a nested button/link from
-         * triggering the upload area twice.
-         */
+        if (event) {
 
-        if (
-            event &&
-            event.target &&
-            (
-                event.target.tagName === "INPUT" ||
-                event.target.tagName === "BUTTON"
-            )
-        ) {
+            event.preventDefault();
 
-            if (
-                event.target !== fileInput
-            ) {
-
-                event.stopPropagation();
-
-            }
+            event.stopPropagation();
 
         }
 
@@ -167,9 +165,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
-       UPLOAD AREA CLICK
-    ============================== */
+    /* =========================================================
+       DROP ZONE CLICK
+    ========================================================= */
 
     if (dropZone) {
 
@@ -177,26 +175,16 @@ document.addEventListener("DOMContentLoaded", () => {
             "click",
             event => {
 
-                /*
-                 * Do not trigger the hidden
-                 * file input if the user clicked
-                 * directly on a real button.
-                 */
-
                 if (
-                    event.target.closest(
-                        "button"
-                    ) ||
-                    event.target.closest(
-                        "input"
-                    )
+                    event.target.closest("button") ||
+                    event.target.closest("input")
                 ) {
 
                     return;
 
                 }
 
-                fileInput.click();
+                openFileSelector(event);
 
             }
         );
@@ -204,9 +192,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
-       CHOOSE MEDIA BUTTON
-    ============================== */
+    /* =========================================================
+       CUSTOM UPLOAD BUTTON
+    ========================================================= */
 
     if (chooseMediaButton) {
 
@@ -214,15 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
             "click",
             event => {
 
-                event.preventDefault();
-
-                event.stopPropagation();
-
-                if (!analysisInProgress) {
-
-                    fileInput.click();
-
-                }
+                openFileSelector(event);
 
             }
         );
@@ -230,9 +210,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
-       FILE INPUT CHANGE
-    ============================== */
+    /* =========================================================
+       FILE INPUT
+    ========================================================= */
 
     fileInput.addEventListener(
         "change",
@@ -258,9 +238,9 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    /* ==============================
-       DRAG OVER
-    ============================== */
+    /* =========================================================
+       DRAG EVENTS
+    ========================================================= */
 
     if (dropZone) {
 
@@ -270,8 +250,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 event.preventDefault();
 
-                event.stopPropagation();
-
                 dropZone.classList.add(
                     "dragover"
                 );
@@ -279,10 +257,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         );
 
-
-        /* ==============================
-           DRAG ENTER
-        ============================== */
 
         dropZone.addEventListener(
             "dragenter",
@@ -290,8 +264,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 event.preventDefault();
 
-                event.stopPropagation();
-
                 dropZone.classList.add(
                     "dragover"
                 );
@@ -300,20 +272,11 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
 
-        /* ==============================
-           DRAG LEAVE
-        ============================== */
-
         dropZone.addEventListener(
             "dragleave",
             event => {
 
                 event.preventDefault();
-
-                /*
-                 * Only remove the class when
-                 * actually leaving the drop zone.
-                 */
 
                 if (
                     event.target === dropZone
@@ -329,17 +292,11 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
 
-        /* ==============================
-           DROP
-        ============================== */
-
         dropZone.addEventListener(
             "drop",
             event => {
 
                 event.preventDefault();
-
-                event.stopPropagation();
 
                 dropZone.classList.remove(
                     "dragover"
@@ -367,9 +324,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
-       PROCESS SELECTED FILE
-    ============================== */
+    /* =========================================================
+       PROCESS FILE
+    ========================================================= */
 
     function processSelectedFile(file) {
 
@@ -398,7 +355,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        selectedFile = file;
+        selectedFile =
+            file;
 
 
         displaySelectedFile(
@@ -409,13 +367,10 @@ document.addEventListener("DOMContentLoaded", () => {
         resetAnalysis();
 
 
-        /*
-         * Enable analysis button.
-         */
-
         if (scanButton) {
 
-            scanButton.disabled = false;
+            scanButton.disabled =
+                false;
 
             scanButton.style.opacity =
                 "1";
@@ -427,16 +382,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         console.log(
-            "DeepShield AI: File selected:",
+            "DeepShield AI: Selected:",
             file.name
         );
 
     }
 
 
-    /* ==============================
+    /* =========================================================
        VALIDATE FILE
-    ============================== */
+    ========================================================= */
 
     function validateFile(file) {
 
@@ -507,9 +462,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        DISPLAY SELECTED FILE
-    ============================== */
+    ========================================================= */
 
     function displaySelectedFile(file) {
 
@@ -520,17 +475,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        const size =
-            formatFileSize(
-                file.size
-            );
-
-
-        const type =
-            file.type ||
-            "Unknown media type";
-
-
         fileSelected.style.display =
             "block";
 
@@ -539,14 +483,14 @@ document.addEventListener("DOMContentLoaded", () => {
             ✓ <strong>${escapeHTML(file.name)}</strong>
             <br>
             <span style="opacity:0.75;">
-                ${escapeHTML(type)} • ${size}
+                ${escapeHTML(
+                    file.type || "Unknown media type"
+                )}
+                •
+                ${formatFileSize(file.size)}
             </span>
         `;
 
-
-        /*
-         * Add selected state to upload area.
-         */
 
         if (dropZone) {
 
@@ -559,9 +503,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        START ANALYSIS
-    ============================== */
+    ========================================================= */
 
     if (scanButton) {
 
@@ -588,7 +532,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
 
-                analysisInProgress = true;
+                analysisInProgress =
+                    true;
 
 
                 setButtonState(
@@ -645,31 +590,50 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
-       LOCAL ANALYSIS ENGINE
-    ============================== */
+    /* =========================================================
+       MAIN ANALYSIS ENGINE
+    ========================================================= */
 
-    async function performLocalAnalysis(
-        file
-    ) {
+    async function performLocalAnalysis(file) {
 
         const metadata =
-            await inspectMedia(
-                file
-            );
+            await inspectMedia(file);
+
+
+        let pixelAnalysis =
+            null;
+
+
+        /*
+         * Real pixel analysis is currently
+         * performed for images.
+         */
+
+        if (
+            getMediaType(file) === "image"
+        ) {
+
+            pixelAnalysis =
+                await analyzeImagePixels(
+                    file
+                );
+
+        }
 
 
         const indicators =
             generateForensicIndicators(
                 file,
-                metadata
+                metadata,
+                pixelAnalysis
             );
 
 
         const score =
-            calculateDemoScore(
+            calculateForensicScore(
                 file,
                 metadata,
+                pixelAnalysis,
                 indicators
             );
 
@@ -686,49 +650,48 @@ document.addEventListener("DOMContentLoaded", () => {
                 file.type,
 
             mediaType:
-                getMediaType(
-                    file
-                ),
+                getMediaType(file),
 
             metadata,
+
+            pixelAnalysis,
 
             indicators,
 
             score,
 
             risk:
-                getRiskLevel(
-                    score
-                ),
+                getRiskLevel(score),
 
             generatedAt:
                 new Date().toISOString(),
 
             engine:
-                "DeepShield Local Forensics v0.1"
+                "DeepShield Visual Forensics v0.2",
+
+            disclaimer:
+                "Heuristic forensic analysis. Not a definitive deepfake verdict."
 
         };
 
     }
 
 
-    /* ==============================
+    /* =========================================================
        MEDIA INSPECTION
-    ============================== */
+    ========================================================= */
 
     function inspectMedia(file) {
 
         return new Promise(resolve => {
 
             const mediaType =
-                getMediaType(
-                    file
-                );
+                getMediaType(file);
 
 
-            /* ==========================
+            /* -------------------------
                IMAGE
-            ========================== */
+            ------------------------- */
 
             if (
                 mediaType === "image"
@@ -739,9 +702,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                 const objectURL =
-                    URL.createObjectURL(
-                        file
-                    );
+                    URL.createObjectURL(file);
 
 
                 image.onload = () => {
@@ -806,9 +767,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
 
-            /* ==========================
+            /* -------------------------
                VIDEO
-            ========================== */
+            ------------------------- */
 
             if (
                 mediaType === "video"
@@ -821,9 +782,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                 const objectURL =
-                    URL.createObjectURL(
-                        file
-                    );
+                    URL.createObjectURL(file);
 
 
                 video.preload =
@@ -907,17 +866,888 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
+       REAL IMAGE PIXEL ANALYSIS
+    ========================================================= */
+
+    function analyzeImagePixels(file) {
+
+        return new Promise(
+            (resolve, reject) => {
+
+                const image =
+                    new Image();
+
+
+                const objectURL =
+                    URL.createObjectURL(
+                        file
+                    );
+
+
+                image.onload = () => {
+
+                    try {
+
+                        const originalWidth =
+                            image.naturalWidth;
+
+                        const originalHeight =
+                            image.naturalHeight;
+
+
+                        /*
+                         * Resize image while keeping
+                         * aspect ratio.
+                         */
+
+                        let width =
+                            originalWidth;
+
+                        let height =
+                            originalHeight;
+
+
+                        const maxDimension =
+                            CONFIG.analysisMaxDimension;
+
+
+                        if (
+                            Math.max(
+                                width,
+                                height
+                            ) >
+                            maxDimension
+                        ) {
+
+                            const scale =
+                                maxDimension /
+                                Math.max(
+                                    width,
+                                    height
+                                );
+
+
+                            width =
+                                Math.max(
+                                    1,
+                                    Math.round(
+                                        width *
+                                        scale
+                                    )
+                                );
+
+
+                            height =
+                                Math.max(
+                                    1,
+                                    Math.round(
+                                        height *
+                                        scale
+                                    )
+                                );
+
+                        }
+
+
+                        /*
+                         * Prevent extremely large
+                         * canvas processing.
+                         */
+
+                        let pixelCount =
+                            width *
+                            height;
+
+
+                        if (
+                            pixelCount >
+                            CONFIG.maxAnalysisPixels
+                        ) {
+
+                            const scale =
+                                Math.sqrt(
+                                    CONFIG.maxAnalysisPixels /
+                                    pixelCount
+                                );
+
+
+                            width =
+                                Math.max(
+                                    1,
+                                    Math.round(
+                                        width *
+                                        scale
+                                    )
+                                );
+
+
+                            height =
+                                Math.max(
+                                    1,
+                                    Math.round(
+                                        height *
+                                        scale
+                                    )
+                                );
+
+                        }
+
+
+                        const canvas =
+                            document.createElement(
+                                "canvas"
+                            );
+
+
+                        canvas.width =
+                            width;
+
+
+                        canvas.height =
+                            height;
+
+
+                        const ctx =
+                            canvas.getContext(
+                                "2d",
+                                {
+                                    willReadFrequently:
+                                        true
+                                }
+                            );
+
+
+                        ctx.drawImage(
+                            image,
+                            0,
+                            0,
+                            width,
+                            height
+                        );
+
+
+                        const imageData =
+                            ctx.getImageData(
+                                0,
+                                0,
+                                width,
+                                height
+                            );
+
+
+                        const result =
+                            calculatePixelStatistics(
+                                imageData.data,
+                                width,
+                                height
+                            );
+
+
+                        result.originalWidth =
+                            originalWidth;
+
+                        result.originalHeight =
+                            originalHeight;
+
+                        result.analyzedWidth =
+                            width;
+
+                        result.analyzedHeight =
+                            height;
+
+
+                        URL.revokeObjectURL(
+                            objectURL
+                        );
+
+
+                        resolve(
+                            result
+                        );
+
+                    }
+
+                    catch (error) {
+
+                        URL.revokeObjectURL(
+                            objectURL
+                        );
+
+                        reject(error);
+
+                    }
+
+                };
+
+
+                image.onerror = () => {
+
+                    URL.revokeObjectURL(
+                        objectURL
+                    );
+
+
+                    reject(
+                        new Error(
+                            "Unable to decode image."
+                        )
+                    );
+
+                };
+
+
+                image.src =
+                    objectURL;
+
+            }
+        );
+
+    }
+
+
+    /* =========================================================
+       PIXEL STATISTICS
+    ========================================================= */
+
+    function calculatePixelStatistics(
+        data,
+        width,
+        height
+    ) {
+
+        const pixelCount =
+            width *
+            height;
+
+
+        /*
+         * Grayscale histogram.
+         */
+
+        const histogram =
+            new Array(256).fill(0);
+
+
+        let sumR = 0;
+        let sumG = 0;
+        let sumB = 0;
+
+        let sumL = 0;
+        let sumL2 = 0;
+
+        let sumS = 0;
+        let sumS2 = 0;
+
+
+        /*
+         * First pass.
+         */
+
+        for (
+            let i = 0;
+            i < data.length;
+            i += 4
+        ) {
+
+            const r =
+                data[i];
+
+            const g =
+                data[i + 1];
+
+            const b =
+                data[i + 2];
+
+
+            const luminance =
+                0.2126 * r +
+                0.7152 * g +
+                0.0722 * b;
+
+
+            const max =
+                Math.max(
+                    r,
+                    g,
+                    b
+                );
+
+
+            const min =
+                Math.min(
+                    r,
+                    g,
+                    b
+                );
+
+
+            const saturation =
+                max === 0
+                    ? 0
+                    : (
+                        (max - min) /
+                        max
+                    );
+
+
+            const gray =
+                Math.max(
+                    0,
+                    Math.min(
+                        255,
+                        Math.round(
+                            luminance
+                        )
+                    )
+                );
+
+
+            histogram[gray]++;
+
+
+            sumR += r;
+            sumG += g;
+            sumB += b;
+
+            sumL += luminance;
+            sumL2 +=
+                luminance *
+                luminance;
+
+            sumS += saturation;
+            sumS2 +=
+                saturation *
+                saturation;
+
+        }
+
+
+        const meanR =
+            sumR /
+            pixelCount;
+
+
+        const meanG =
+            sumG /
+            pixelCount;
+
+
+        const meanB =
+            sumB /
+            pixelCount;
+
+
+        const meanL =
+            sumL /
+            pixelCount;
+
+
+        const varianceL =
+            Math.max(
+                0,
+                (
+                    sumL2 /
+                    pixelCount
+                ) -
+                (
+                    meanL *
+                    meanL
+                )
+            );
+
+
+        const stdL =
+            Math.sqrt(
+                varianceL
+            );
+
+
+        const meanS =
+            sumS /
+            pixelCount;
+
+
+        const varianceS =
+            Math.max(
+                0,
+                (
+                    sumS2 /
+                    pixelCount
+                ) -
+                (
+                    meanS *
+                    meanS
+                )
+            );
+
+
+        const stdS =
+            Math.sqrt(
+                varianceS
+            );
+
+
+        /*
+         * Histogram entropy.
+         */
+
+        let entropy = 0;
+
+
+        for (
+            let i = 0;
+            i < histogram.length;
+            i++
+        ) {
+
+            if (
+                histogram[i] === 0
+            ) {
+
+                continue;
+
+            }
+
+
+            const p =
+                histogram[i] /
+                pixelCount;
+
+
+            entropy -=
+                p *
+                Math.log2(p);
+
+        }
+
+
+        /*
+         * Second pass:
+         * edge / texture / noise / blockiness.
+         */
+
+        let edgeSum = 0;
+
+        let edgeSamples = 0;
+
+        let noiseSum = 0;
+
+        let noiseSamples = 0;
+
+        let blockBoundarySum = 0;
+
+        let blockInteriorSum = 0;
+
+        let blockBoundarySamples = 0;
+
+        let blockInteriorSamples = 0;
+
+
+        /*
+         * Helper for grayscale.
+         */
+
+        function getGray(x, y) {
+
+            const index =
+                (
+                    y *
+                    width +
+                    x
+                ) *
+                4;
+
+
+            return (
+                0.2126 * data[index] +
+                0.7152 * data[index + 1] +
+                0.0722 * data[index + 2]
+            );
+
+        }
+
+
+        /*
+         * Sample every few pixels for speed.
+         */
+
+        const step =
+            Math.max(
+                1,
+                Math.floor(
+                    Math.sqrt(
+                        pixelCount /
+                        80000
+                    )
+                )
+            );
+
+
+        for (
+            let y = 1;
+            y < height - 1;
+            y += step
+        ) {
+
+            for (
+                let x = 1;
+                x < width - 1;
+                x += step
+            ) {
+
+                const current =
+                    getGray(
+                        x,
+                        y
+                    );
+
+
+                const right =
+                    getGray(
+                        x + 1,
+                        y
+                    );
+
+
+                const down =
+                    getGray(
+                        x,
+                        y + 1
+                    );
+
+
+                const left =
+                    getGray(
+                        x - 1,
+                        y
+                    );
+
+
+                const up =
+                    getGray(
+                        x,
+                        y - 1
+                    );
+
+
+                /*
+                 * Local gradient.
+                 */
+
+                const gradient =
+                    (
+                        Math.abs(
+                            current -
+                            right
+                        ) +
+                        Math.abs(
+                            current -
+                            down
+                        )
+                    ) / 2;
+
+
+                edgeSum +=
+                    gradient;
+
+
+                edgeSamples++;
+
+
+                /*
+                 * High-frequency residual:
+                 * compares pixel to neighborhood average.
+                 */
+
+                const neighborAverage =
+                    (
+                        right +
+                        down +
+                        left +
+                        up
+                    ) / 4;
+
+
+                const residual =
+                    Math.abs(
+                        current -
+                        neighborAverage
+                    );
+
+
+                noiseSum +=
+                    residual;
+
+
+                noiseSamples++;
+
+
+                /*
+                 * JPEG-like 8x8 block boundary
+                 * estimation.
+                 */
+
+                if (
+                    x % 8 === 0
+                ) {
+
+                    blockBoundarySum +=
+                        Math.abs(
+                            current -
+                            left
+                        );
+
+                    blockBoundarySamples++;
+
+                }
+                else {
+
+                    blockInteriorSum +=
+                        Math.abs(
+                            current -
+                            left
+                        );
+
+                    blockInteriorSamples++;
+
+                }
+
+            }
+
+        }
+
+
+        const edgeStrength =
+            edgeSamples > 0
+                ? edgeSum /
+                  edgeSamples
+                : 0;
+
+
+        const noiseLevel =
+            noiseSamples > 0
+                ? noiseSum /
+                  noiseSamples
+                : 0;
+
+
+        const boundaryAverage =
+            blockBoundarySamples > 0
+                ? blockBoundarySum /
+                  blockBoundarySamples
+                : 0;
+
+
+        const interiorAverage =
+            blockInteriorSamples > 0
+                ? blockInteriorSum /
+                  blockInteriorSamples
+                : 0;
+
+
+        const blockinessRatio =
+            interiorAverage > 0
+                ? boundaryAverage /
+                  interiorAverage
+                : 1;
+
+
+        /*
+         * Channel balance.
+         */
+
+        const channelMean =
+            (
+                meanR +
+                meanG +
+                meanB
+            ) / 3;
+
+
+        const channelDeviation =
+            Math.sqrt(
+                (
+                    Math.pow(
+                        meanR -
+                        channelMean,
+                        2
+                    ) +
+                    Math.pow(
+                        meanG -
+                        channelMean,
+                        2
+                    ) +
+                    Math.pow(
+                        meanB -
+                        channelMean,
+                        2
+                    )
+                ) / 3
+            );
+
+
+        return {
+
+            meanRed:
+                round(meanR),
+
+            meanGreen:
+                round(meanG),
+
+            meanBlue:
+                round(meanB),
+
+            luminanceMean:
+                round(meanL),
+
+            luminanceStd:
+                round(stdL),
+
+            saturationMean:
+                round(
+                    meanS * 100
+                ),
+
+            saturationStd:
+                round(
+                    stdS * 100
+                ),
+
+            entropy:
+                round(entropy, 3),
+
+            edgeStrength:
+                round(edgeStrength, 3),
+
+            noiseLevel:
+                round(noiseLevel, 3),
+
+            blockinessRatio:
+                round(blockinessRatio, 3),
+
+            channelDeviation:
+                round(channelDeviation, 3),
+
+            histogramRange:
+                calculateHistogramRange(
+                    histogram,
+                    pixelCount
+                )
+
+        };
+
+    }
+
+
+    /* =========================================================
+       HISTOGRAM RANGE
+    ========================================================= */
+
+    function calculateHistogramRange(
+        histogram,
+        totalPixels
+    ) {
+
+        const threshold =
+            totalPixels *
+            0.01;
+
+
+        let low =
+            0;
+
+
+        let high =
+            255;
+
+
+        let accumulated =
+            0;
+
+
+        for (
+            let i = 0;
+            i < 256;
+            i++
+        ) {
+
+            accumulated +=
+                histogram[i];
+
+
+            if (
+                accumulated >=
+                threshold
+            ) {
+
+                low = i;
+
+                break;
+
+            }
+
+        }
+
+
+        accumulated =
+            0;
+
+
+        for (
+            let i = 255;
+            i >= 0;
+            i--
+        ) {
+
+            accumulated +=
+                histogram[i];
+
+
+            if (
+                accumulated >=
+                threshold
+            ) {
+
+                high = i;
+
+                break;
+
+            }
+
+        }
+
+
+        return {
+
+            low,
+
+            high,
+
+            range:
+                high - low
+
+        };
+
+    }
+
+
+    /* =========================================================
        FORENSIC INDICATORS
-    ============================== */
+    ========================================================= */
 
     function generateForensicIndicators(
         file,
-        metadata
+        metadata,
+        pixels
     ) {
 
         const indicators = [];
 
+
+        /*
+         * File structure
+         */
 
         indicators.push({
 
@@ -937,12 +1767,16 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
 
+        /*
+         * Resolution
+         */
+
         if (
             metadata.width &&
             metadata.height
         ) {
 
-            const pixels =
+            const pixelsCount =
                 metadata.width *
                 metadata.height;
 
@@ -953,12 +1787,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     "Media Resolution",
 
                 status:
-                    pixels >= 100000
+                    pixelsCount >= 100000
                         ? "Valid"
                         : "Low Resolution",
 
                 severity:
-                    pixels >= 100000
+                    pixelsCount >= 100000
                         ? "low"
                         : "medium"
 
@@ -967,11 +1801,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
+        /*
+         * Aspect ratio
+         */
+
         if (
             metadata.aspectRatio
         ) {
 
-            const unusualRatio =
+            const unusual =
                 metadata.aspectRatio < 0.3 ||
                 metadata.aspectRatio > 3.5;
 
@@ -982,12 +1820,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     "Aspect Ratio",
 
                 status:
-                    unusualRatio
+                    unusual
                         ? "Unusual"
                         : "Normal",
 
                 severity:
-                    unusualRatio
+                    unusual
                         ? "medium"
                         : "low"
 
@@ -995,6 +1833,148 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
+
+        /*
+         * Actual pixel analysis
+         */
+
+        if (pixels) {
+
+            /*
+             * Sharpness
+             */
+
+            indicators.push({
+
+                name:
+                    "Edge Detail",
+
+                status:
+                    classifyEdgeStrength(
+                        pixels.edgeStrength
+                    ),
+
+                severity:
+                    edgeSeverity(
+                        pixels.edgeStrength
+                    )
+
+            });
+
+
+            /*
+             * Noise
+             */
+
+            indicators.push({
+
+                name:
+                    "Noise Profile",
+
+                status:
+                    classifyNoise(
+                        pixels.noiseLevel
+                    ),
+
+                severity:
+                    noiseSeverity(
+                        pixels.noiseLevel
+                    )
+
+            });
+
+
+            /*
+             * Entropy
+             */
+
+            indicators.push({
+
+                name:
+                    "Image Entropy",
+
+                status:
+                    classifyEntropy(
+                        pixels.entropy
+                    ),
+
+                severity:
+                    entropySeverity(
+                        pixels.entropy
+                    )
+
+            });
+
+
+            /*
+             * Compression
+             */
+
+            indicators.push({
+
+                name:
+                    "Compression Pattern",
+
+                status:
+                    classifyBlockiness(
+                        pixels.blockinessRatio
+                    ),
+
+                severity:
+                    blockinessSeverity(
+                        pixels.blockinessRatio
+                    )
+
+            });
+
+
+            /*
+             * Color
+             */
+
+            indicators.push({
+
+                name:
+                    "Color Distribution",
+
+                status:
+                    classifyColorDistribution(
+                        pixels
+                    ),
+
+                severity:
+                    colorSeverity(
+                        pixels
+                    )
+
+            });
+
+
+            /*
+             * Histogram
+             */
+
+            indicators.push({
+
+                name:
+                    "Histogram Spread",
+
+                status:
+                    `${pixels.histogramRange.range} / 255`,
+
+                severity:
+                    pixels.histogramRange.range < 80
+                        ? "medium"
+                        : "low"
+
+            });
+
+        }
+
+
+        /*
+         * File extension
+         */
 
         const extension =
             getFileExtension(
@@ -1024,106 +2004,489 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
 
-        indicators.push({
-
-            name:
-                "File Size",
-
-            status:
-                file.size < 1024
-                    ? "Very Small"
-                    : "Normal",
-
-            severity:
-                file.size < 1024
-                    ? "medium"
-                    : "low"
-
-        });
-
-
         return indicators;
 
     }
 
 
-    /* ==============================
-       DEMO SCORE
-    ============================== */
+    /* =========================================================
+       FORENSIC SCORE
+       ========================================================= */
 
-    function calculateDemoScore(
+    function calculateForensicScore(
         file,
         metadata,
+        pixels,
         indicators
     ) {
 
-        let score = 8;
+        /*
+         * IMPORTANT:
+         * This score represents anomaly signals,
+         * NOT deepfake probability.
+         */
+
+        if (!pixels) {
+
+            /*
+             * Videos currently receive a
+             * metadata-based score.
+             */
+
+            let videoScore =
+                10;
 
 
-        const suspicious =
-            indicators.filter(
-                indicator =>
-                    indicator.severity === "medium" ||
-                    indicator.severity === "high"
+            if (
+                metadata.duration &&
+                metadata.duration < 1
+            ) {
+
+                videoScore += 10;
+
+            }
+
+
+            return clamp(
+                videoScore,
+                1,
+                99
             );
-
-
-        score +=
-            suspicious.length * 7;
-
-
-        if (
-            file.size >
-            5 * 1024 * 1024
-        ) {
-
-            score += 2;
 
         }
 
+
+        let score = 5;
+
+
+        /*
+         * Very low entropy can indicate
+         * overly smooth / simplified imagery.
+         */
+
+        if (
+            pixels.entropy < 3.5
+        ) {
+
+            score += 10;
+
+        }
+        else if (
+            pixels.entropy < 4.5
+        ) {
+
+            score += 4;
+
+        }
+
+
+        /*
+         * Very high or very low noise.
+         */
+
+        if (
+            pixels.noiseLevel < 0.8
+        ) {
+
+            score += 8;
+
+        }
+        else if (
+            pixels.noiseLevel > 15
+        ) {
+
+            score += 7;
+
+        }
+
+
+        /*
+         * Extremely weak edge structure.
+         */
+
+        if (
+            pixels.edgeStrength < 2
+        ) {
+
+            score += 8;
+
+        }
+
+
+        /*
+         * Strong block boundary pattern.
+         */
+
+        if (
+            pixels.blockinessRatio > 1.35
+        ) {
+
+            score += 12;
+
+        }
+        else if (
+            pixels.blockinessRatio > 1.18
+        ) {
+
+            score += 5;
+
+        }
+
+
+        /*
+         * Very narrow histogram.
+         */
+
+        if (
+            pixels.histogramRange.range < 60
+        ) {
+
+            score += 8;
+
+        }
+        else if (
+            pixels.histogramRange.range < 100
+        ) {
+
+            score += 3;
+
+        }
+
+
+        /*
+         * Unusual color-channel imbalance.
+         */
+
+        if (
+            pixels.channelDeviation > 35
+        ) {
+
+            score += 7;
+
+        }
+
+
+        /*
+         * Very high saturation uniformity.
+         */
+
+        if (
+            pixels.saturationStd < 4 &&
+            pixels.saturationMean > 60
+        ) {
+
+            score += 5;
+
+        }
+
+
+        /*
+         * Large images are not automatically
+         * suspicious. Only use file-size ratio
+         * as a weak signal.
+         */
 
         if (
             metadata.width &&
             metadata.height
         ) {
 
+            const megapixels =
+                (
+                    metadata.width *
+                    metadata.height
+                ) / 1000000;
+
+
             if (
-                metadata.width >= 1920 &&
-                metadata.height >= 1080
+                megapixels > 2 &&
+                file.size < 100000
             ) {
 
-                score += 3;
+                score += 4;
 
             }
 
         }
 
 
-        return Math.min(
-            Math.max(
-                score,
-                1
-            ),
+        /*
+         * Add only a small contribution
+         * from generic indicators.
+         */
+
+        const mediumIndicators =
+            indicators.filter(
+                item =>
+                    item.severity === "medium"
+            ).length;
+
+
+        score +=
+            Math.min(
+                mediumIndicators * 2,
+                8
+            );
+
+
+        return clamp(
+            Math.round(score),
+            1,
             99
         );
 
     }
 
 
-    /* ==============================
+    /* =========================================================
+       CLASSIFICATION FUNCTIONS
+    ========================================================= */
+
+    function classifyEdgeStrength(value) {
+
+        if (value < 2) {
+
+            return "Very Low";
+
+        }
+
+        if (value < 5) {
+
+            return "Low";
+
+        }
+
+        if (value < 12) {
+
+            return "Normal";
+
+        }
+
+        if (value < 25) {
+
+            return "High";
+
+        }
+
+        return "Very High";
+
+    }
+
+
+    function edgeSeverity(value) {
+
+        if (
+            value < 2
+        ) {
+
+            return "medium";
+
+        }
+
+        if (
+            value > 40
+        ) {
+
+            return "medium";
+
+        }
+
+        return "low";
+
+    }
+
+
+    function classifyNoise(value) {
+
+        if (value < 0.8) {
+
+            return "Very Low";
+
+        }
+
+        if (value < 2.5) {
+
+            return "Low";
+
+        }
+
+        if (value < 7) {
+
+            return "Normal";
+
+        }
+
+        if (value < 15) {
+
+            return "High";
+
+        }
+
+        return "Very High";
+
+    }
+
+
+    function noiseSeverity(value) {
+
+        if (
+            value < 0.8 ||
+            value > 15
+        ) {
+
+            return "medium";
+
+        }
+
+        return "low";
+
+    }
+
+
+    function classifyEntropy(value) {
+
+        if (value < 3.5) {
+
+            return "Low Complexity";
+
+        }
+
+        if (value < 5) {
+
+            return "Moderate";
+
+        }
+
+        if (value < 7) {
+
+            return "High Complexity";
+
+        }
+
+        return "Very High";
+
+    }
+
+
+    function entropySeverity(value) {
+
+        if (
+            value < 3.5
+        ) {
+
+            return "medium";
+
+        }
+
+        return "low";
+
+    }
+
+
+    function classifyBlockiness(value) {
+
+        if (value < 1.08) {
+
+            return "Low";
+
+        }
+
+        if (value < 1.18) {
+
+            return "Normal";
+
+        }
+
+        if (value < 1.35) {
+
+            return "Elevated";
+
+        }
+
+        return "Strong";
+
+    }
+
+
+    function blockinessSeverity(value) {
+
+        if (
+            value > 1.35
+        ) {
+
+            return "medium";
+
+        }
+
+        return "low";
+
+    }
+
+
+    function classifyColorDistribution(pixels) {
+
+        if (
+            pixels.channelDeviation > 35
+        ) {
+
+            return "Strong Channel Bias";
+
+        }
+
+        if (
+            pixels.saturationMean > 75
+        ) {
+
+            return "Highly Saturated";
+
+        }
+
+        if (
+            pixels.saturationMean < 8
+        ) {
+
+            return "Low Saturation";
+
+        }
+
+        return "Balanced";
+
+    }
+
+
+    function colorSeverity(pixels) {
+
+        if (
+            pixels.channelDeviation > 35
+        ) {
+
+            return "medium";
+
+        }
+
+        return "low";
+
+    }
+
+
+    /* =========================================================
        RISK LEVEL
-    ============================== */
+       ========================================================= */
 
     function getRiskLevel(score) {
 
-        if (score >= 75) {
+        if (
+            score >= 70
+        ) {
 
             return "HIGH";
 
         }
 
 
-        if (score >= 45) {
+        if (
+            score >= 40
+        ) {
 
             return "MEDIUM";
 
@@ -1135,13 +2498,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        DISPLAY RESULT
-    ============================== */
+    ========================================================= */
 
-    function displayAnalysisResult(
-        report
-    ) {
+    function displayAnalysisResult(report) {
 
         if (
             !resultEmpty ||
@@ -1186,13 +2547,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
-       UPDATE RISK LABEL
-    ============================== */
+    /* =========================================================
+       RISK LABEL
+    ========================================================= */
 
-    function updateRiskLabel(
-        risk
-    ) {
+    function updateRiskLabel(risk) {
 
         const riskElement =
             analysisResult.querySelector(
@@ -1208,14 +2567,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         riskElement.textContent =
-            `${risk} RISK`;
+            `${risk} ANOMALY`;
 
     }
 
 
-    /* ==============================
-       UPDATE INDICATORS
-    ============================== */
+    /* =========================================================
+       INDICATORS UI
+    ========================================================= */
 
     function updateIndicators(
         indicators
@@ -1291,9 +2650,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        ANALYSIS DETAILS
-    ============================== */
+    ========================================================= */
 
     function updateAnalysisDetails(
         report
@@ -1359,26 +2718,80 @@ document.addEventListener("DOMContentLoaded", () => {
                 : "N/A";
 
 
+        let pixelDetails =
+            "";
+
+
+        if (report.pixelAnalysis) {
+
+            const p =
+                report.pixelAnalysis;
+
+
+            pixelDetails = `
+                <br>
+                <br>
+                <strong>Pixel Forensics</strong>
+                <br>
+                Luminance Mean:
+                ${p.luminanceMean}
+                <br>
+                Luminance Std:
+                ${p.luminanceStd}
+                <br>
+                Saturation:
+                ${p.saturationMean}%
+                <br>
+                Entropy:
+                ${p.entropy}
+                <br>
+                Edge Strength:
+                ${p.edgeStrength}
+                <br>
+                Noise Level:
+                ${p.noiseLevel}
+                <br>
+                Blockiness:
+                ${p.blockinessRatio}
+                <br>
+                Histogram Range:
+                ${p.histogramRange.range}
+            `;
+
+        }
+
+
         details.innerHTML = `
             <strong>Forensic Information</strong>
             <br>
-            File: ${escapeHTML(report.fileName)}
+            File:
+            ${escapeHTML(report.fileName)}
             <br>
-            Type: ${escapeHTML(report.mediaType)}
+            Type:
+            ${escapeHTML(report.mediaType)}
             <br>
-            Size: ${formatFileSize(report.fileSize)}
+            Size:
+            ${formatFileSize(report.fileSize)}
             <br>
-            Resolution: ${dimensions}
+            Resolution:
+            ${dimensions}
             <br>
-            Engine: ${escapeHTML(report.engine)}
+            Engine:
+            ${escapeHTML(report.engine)}
+            ${pixelDetails}
+            <br>
+            <br>
+            <span style="opacity:0.65;">
+                ⚠ ${escapeHTML(report.disclaimer)}
+            </span>
         `;
 
     }
 
 
-    /* ==============================
+    /* =========================================================
        RESET ANALYSIS
-    ============================== */
+    ========================================================= */
 
     function resetAnalysis() {
 
@@ -1400,13 +2813,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
-       RESET FILE
-    ============================== */
+    /* =========================================================
+       RESET SELECTION
+    ========================================================= */
 
     function resetSelection() {
 
-        selectedFile = null;
+        selectedFile =
+            null;
 
 
         fileInput.value =
@@ -1439,22 +2853,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (scanButton) {
 
             scanButton.disabled =
-                false;
+                true;
 
             scanButton.style.opacity =
-                "1";
+                "0.6";
 
             scanButton.style.cursor =
-                "pointer";
+                "not-allowed";
 
         }
 
     }
 
 
-    /* ==============================
+    /* =========================================================
        BUTTON STATE
-    ============================== */
+    ========================================================= */
 
     function setButtonState(
         text,
@@ -1490,9 +2904,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        MESSAGE
-    ============================== */
+    ========================================================= */
 
     function showMessage(
         message,
@@ -1517,13 +2931,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        MEDIA TYPE
-    ============================== */
+    ========================================================= */
 
-    function getMediaType(
-        file
-    ) {
+    function getMediaType(file) {
 
         if (
             file.type &&
@@ -1582,9 +2994,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        FILE EXTENSION
-    ============================== */
+    ========================================================= */
 
     function getFileExtension(
         filename
@@ -1611,9 +3023,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        FILE SIZE
-    ============================== */
+    ========================================================= */
 
     function formatFileSize(
         bytes
@@ -1627,12 +3039,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         const units = [
-
             "B",
             "KB",
             "MB",
             "GB"
-
         ];
 
 
@@ -1668,9 +3078,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
        ASPECT RATIO
-    ============================== */
+    ========================================================= */
 
     function calculateAspectRatio(
         width,
@@ -1697,9 +3107,54 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
+    /* =========================================================
+       ROUND
+    ========================================================= */
+
+    function round(
+        value,
+        decimals = 2
+    ) {
+
+        const factor =
+            Math.pow(
+                10,
+                decimals
+            );
+
+
+        return Math.round(
+            value *
+            factor
+        ) / factor;
+
+    }
+
+
+    /* =========================================================
+       CLAMP
+    ========================================================= */
+
+    function clamp(
+        value,
+        min,
+        max
+    ) {
+
+        return Math.min(
+            Math.max(
+                value,
+                min
+            ),
+            max
+        );
+
+    }
+
+
+    /* =========================================================
        HTML ESCAPE
-    ============================== */
+    ========================================================= */
 
     function escapeHTML(
         value
@@ -1735,17 +3190,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* ==============================
-       INITIAL STATE
-    ============================== */
+    /* =========================================================
+       INITIALIZATION
+    ========================================================= */
 
     resetSelection();
 
-
-    /*
-     * Make sure the hidden file input
-     * accepts the supported formats.
-     */
 
     fileInput.setAttribute(
         "accept",
@@ -1768,7 +3218,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     console.log(
-        "Upload interface ready."
+        "Visual Forensics Engine v0.2 ready."
     );
 
 });
