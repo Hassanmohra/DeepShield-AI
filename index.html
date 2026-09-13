@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -392,6 +391,12 @@
             box-shadow: 0 12px 30px rgba(56, 189, 248, 0.18);
         }
 
+        .scan-button:disabled {
+            opacity: 0.7;
+            cursor: wait;
+            transform: none;
+        }
+
         .file-selected {
             display: none;
             margin-top: 15px;
@@ -493,17 +498,24 @@
 
 <header>
     <div class="nav">
+
         <div class="logo">
             <div class="logo-icon">🛡️</div>
-            <div>DeepShield <span style="color:#38bdf8;">AI</span></div>
+
+            <div>
+                DeepShield
+                <span style="color:#38bdf8;">AI</span>
+            </div>
         </div>
 
         <div class="status">
             <span class="status-dot"></span>
             System Online
         </div>
+
     </div>
 </header>
+
 
 <main>
 
@@ -526,17 +538,30 @@
 
     </section>
 
+
     <section class="workspace">
 
         <!-- Upload Area -->
         <div class="card upload-card">
 
             <div class="card-title">
-                <h2>Media Analysis</h2>
-                <span>SECURE UPLOAD</span>
+
+                <h2>
+                    Media Analysis
+                </h2>
+
+                <span>
+                    SECURE UPLOAD
+                </span>
+
             </div>
 
-            <label class="drop-zone" id="dropZone" for="fileInput">
+
+            <label
+                class="drop-zone"
+                id="dropZone"
+                for="fileInput"
+            >
 
                 <div>
 
@@ -558,17 +583,22 @@
                     </div>
 
                     <div class="formats">
+
                         <span class="format">JPG</span>
                         <span class="format">PNG</span>
                         <span class="format">WEBP</span>
+                        <span class="format">GIF</span>
                         <span class="format">MP4</span>
+                        <span class="format">WEBM</span>
                         <span class="format">MOV</span>
                         <span class="format">AVI</span>
+
                     </div>
 
                 </div>
 
             </label>
+
 
             <input
                 type="file"
@@ -576,9 +606,18 @@
                 accept="image/*,video/*"
             >
 
-            <div class="file-selected" id="fileSelected"></div>
 
-            <button class="scan-button" id="scanButton">
+            <div
+                class="file-selected"
+                id="fileSelected"
+            ></div>
+
+
+            <button
+                class="scan-button"
+                id="scanButton"
+                type="button"
+            >
                 Start AI Analysis
             </button>
 
@@ -589,11 +628,22 @@
         <div class="card result-card">
 
             <div class="card-title">
-                <h2>Analysis Result</h2>
-                <span>DEEPSHIELD ENGINE</span>
+
+                <h2>
+                    Analysis Result
+                </h2>
+
+                <span>
+                    DEEPSHIELD ENGINE
+                </span>
+
             </div>
 
-            <div class="result-empty" id="resultEmpty">
+
+            <div
+                class="result-empty"
+                id="resultEmpty"
+            >
 
                 <div>
 
@@ -615,11 +665,17 @@
             </div>
 
 
-            <div class="analysis-result" id="analysisResult">
+            <div
+                class="analysis-result"
+                id="analysisResult"
+            >
 
                 <div class="score-box">
 
-                    <div class="score" id="score">
+                    <div
+                        class="score"
+                        id="score"
+                    >
                         87%
                     </div>
 
@@ -632,6 +688,7 @@
                     </div>
 
                 </div>
+
 
                 <div class="indicators">
 
@@ -730,104 +787,8 @@
 </footer>
 
 
-<script>
-
-    const fileInput = document.getElementById("fileInput");
-    const dropZone = document.getElementById("dropZone");
-    const fileSelected = document.getElementById("fileSelected");
-    const scanButton = document.getElementById("scanButton");
-
-    const resultEmpty = document.getElementById("resultEmpty");
-    const analysisResult = document.getElementById("analysisResult");
-
-    let selectedFile = null;
-
-
-    fileInput.addEventListener("change", function () {
-
-        if (this.files.length > 0) {
-            handleFile(this.files[0]);
-        }
-
-    });
-
-
-    function handleFile(file) {
-
-        selectedFile = file;
-
-        fileSelected.style.display = "block";
-
-        fileSelected.textContent =
-            "✓ Selected: " + file.name;
-
-        dropZone.classList.add("dragover");
-
-        setTimeout(() => {
-            dropZone.classList.remove("dragover");
-        }, 500);
-    }
-
-
-    dropZone.addEventListener("dragover", function (event) {
-
-        event.preventDefault();
-
-        dropZone.classList.add("dragover");
-
-    });
-
-
-    dropZone.addEventListener("dragleave", function () {
-
-        dropZone.classList.remove("dragover");
-
-    });
-
-
-    dropZone.addEventListener("drop", function (event) {
-
-        event.preventDefault();
-
-        dropZone.classList.remove("dragover");
-
-        const files = event.dataTransfer.files;
-
-        if (files.length > 0) {
-            handleFile(files[0]);
-        }
-
-    });
-
-
-    scanButton.addEventListener("click", function () {
-
-        if (!selectedFile) {
-
-            alert("Please select an image or video first.");
-
-            return;
-        }
-
-
-        scanButton.textContent = "Analyzing Media...";
-        scanButton.disabled = true;
-
-
-        setTimeout(function () {
-
-            resultEmpty.style.display = "none";
-            analysisResult.style.display = "block";
-
-            scanButton.textContent = "Analysis Complete";
-            scanButton.disabled = false;
-
-        }, 1800);
-
-    });
-
-</script>
+<!-- DeepShield AI JavaScript -->
+<script src="js/app.js"></script>
 
 </body>
 </html>
-```
