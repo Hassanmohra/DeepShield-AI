@@ -1,19 +1,18 @@
-```javascript
 "use strict";
 
 /*
  * DeepShield AI
  * Client-side media analysis controller
  *
- * Current version:
+ * Features:
  * - File selection
+ * - Custom upload button support
+ * - Upload area click support
  * - Drag & drop
  * - File validation
  * - Media metadata inspection
  * - Local forensic indicators
  * - Analysis report generation
- *
- * No external libraries required.
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -29,12 +28,53 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const resultEmpty = document.getElementById("resultEmpty");
     const analysisResult = document.getElementById("analysisResult");
-
     const scoreElement = document.getElementById("score");
 
-    if (!fileInput || !dropZone || !scanButton) {
-        console.error("DeepShield AI: Required interface elements were not found.");
+    /*
+     * Try to find the visible upload button.
+     * This supports several common IDs/classes
+     * without requiring changes to index.html.
+     */
+
+    const chooseMediaButton =
+        document.getElementById("chooseMedia") ||
+        document.getElementById("chooseMediaBtn") ||
+        document.getElementById("uploadButton") ||
+        document.getElementById("browseButton") ||
+        document.querySelector(".choose-media") ||
+        document.querySelector(".upload-button") ||
+        document.querySelector(".browse-button");
+
+
+    /* ==============================
+       REQUIRED ELEMENT CHECK
+    ============================== */
+
+    if (!fileInput) {
+
+        console.error(
+            "DeepShield AI: #fileInput was not found."
+        );
+
         return;
+    }
+
+
+    if (!dropZone) {
+
+        console.warn(
+            "DeepShield AI: #dropZone was not found."
+        );
+
+    }
+
+
+    if (!scanButton) {
+
+        console.warn(
+            "DeepShield AI: #scanButton was not found."
+        );
+
     }
 
 
@@ -44,7 +84,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const CONFIG = {
 
-        maxFileSize: 200 * 1024 * 1024,
+        maxFileSize:
+            200 * 1024 * 1024,
 
         allowedImageTypes: [
             "image/jpeg",
@@ -84,66 +125,264 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* ==============================
-       FILE SELECTION
+       OPEN FILE SELECTOR
     ============================== */
 
-    fileInput.addEventListener("change", event => {
+    function openFileSelector(event) {
 
-        const files = event.target.files;
+        /*
+         * Prevent a nested button/link from
+         * triggering the upload area twice.
+         */
 
-        if (!files || files.length === 0) {
-            return;
+        if (
+            event &&
+            event.target &&
+            (
+                event.target.tagName === "INPUT" ||
+                event.target.tagName === "BUTTON"
+            )
+        ) {
+
+            if (
+                event.target !== fileInput
+            ) {
+
+                event.stopPropagation();
+
+            }
+
         }
 
-        processSelectedFile(files[0]);
 
-    });
+        if (
+            fileInput &&
+            !analysisInProgress
+        ) {
+
+            fileInput.click();
+
+        }
+
+    }
 
 
     /* ==============================
-       DRAG & DROP
+       UPLOAD AREA CLICK
     ============================== */
 
-    dropZone.addEventListener("dragover", event => {
+    if (dropZone) {
 
-        event.preventDefault();
+        dropZone.addEventListener(
+            "click",
+            event => {
 
-        dropZone.classList.add("dragover");
+                /*
+                 * Do not trigger the hidden
+                 * file input if the user clicked
+                 * directly on a real button.
+                 */
 
-    });
+                if (
+                    event.target.closest(
+                        "button"
+                    ) ||
+                    event.target.closest(
+                        "input"
+                    )
+                ) {
 
+                    return;
 
-    dropZone.addEventListener("dragleave", () => {
+                }
 
-        dropZone.classList.remove("dragover");
+                fileInput.click();
 
-    });
+            }
+        );
 
-
-    dropZone.addEventListener("drop", event => {
-
-        event.preventDefault();
-
-        dropZone.classList.remove("dragover");
-
-        const files = event.dataTransfer.files;
-
-        if (!files || files.length === 0) {
-            return;
-        }
-
-        processSelectedFile(files[0]);
-
-    });
+    }
 
 
     /* ==============================
-       PROCESS FILE
+       CHOOSE MEDIA BUTTON
+    ============================== */
+
+    if (chooseMediaButton) {
+
+        chooseMediaButton.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+                if (!analysisInProgress) {
+
+                    fileInput.click();
+
+                }
+
+            }
+        );
+
+    }
+
+
+    /* ==============================
+       FILE INPUT CHANGE
+    ============================== */
+
+    fileInput.addEventListener(
+        "change",
+        event => {
+
+            const files =
+                event.target.files;
+
+            if (
+                !files ||
+                files.length === 0
+            ) {
+
+                return;
+
+            }
+
+            processSelectedFile(
+                files[0]
+            );
+
+        }
+    );
+
+
+    /* ==============================
+       DRAG OVER
+    ============================== */
+
+    if (dropZone) {
+
+        dropZone.addEventListener(
+            "dragover",
+            event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+                dropZone.classList.add(
+                    "dragover"
+                );
+
+            }
+        );
+
+
+        /* ==============================
+           DRAG ENTER
+        ============================== */
+
+        dropZone.addEventListener(
+            "dragenter",
+            event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+                dropZone.classList.add(
+                    "dragover"
+                );
+
+            }
+        );
+
+
+        /* ==============================
+           DRAG LEAVE
+        ============================== */
+
+        dropZone.addEventListener(
+            "dragleave",
+            event => {
+
+                event.preventDefault();
+
+                /*
+                 * Only remove the class when
+                 * actually leaving the drop zone.
+                 */
+
+                if (
+                    event.target === dropZone
+                ) {
+
+                    dropZone.classList.remove(
+                        "dragover"
+                    );
+
+                }
+
+            }
+        );
+
+
+        /* ==============================
+           DROP
+        ============================== */
+
+        dropZone.addEventListener(
+            "drop",
+            event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+                dropZone.classList.remove(
+                    "dragover"
+                );
+
+                const files =
+                    event.dataTransfer.files;
+
+                if (
+                    !files ||
+                    files.length === 0
+                ) {
+
+                    return;
+
+                }
+
+                processSelectedFile(
+                    files[0]
+                );
+
+            }
+        );
+
+    }
+
+
+    /* ==============================
+       PROCESS SELECTED FILE
     ============================== */
 
     function processSelectedFile(file) {
 
-        const validation = validateFile(file);
+        if (!file) {
+
+            return;
+
+        }
+
+
+        const validation =
+            validateFile(file);
+
 
         if (!validation.valid) {
 
@@ -155,13 +394,42 @@ document.addEventListener("DOMContentLoaded", () => {
             resetSelection();
 
             return;
+
         }
+
 
         selectedFile = file;
 
-        displaySelectedFile(file);
+
+        displaySelectedFile(
+            file
+        );
+
 
         resetAnalysis();
+
+
+        /*
+         * Enable analysis button.
+         */
+
+        if (scanButton) {
+
+            scanButton.disabled = false;
+
+            scanButton.style.opacity =
+                "1";
+
+            scanButton.style.cursor =
+                "pointer";
+
+        }
+
+
+        console.log(
+            "DeepShield AI: File selected:",
+            file.name
+        );
 
     }
 
@@ -176,33 +444,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
             return {
                 valid: false,
-                message: "No file selected."
+                message:
+                    "No file selected."
             };
 
         }
 
 
-        if (file.size > CONFIG.maxFileSize) {
+        if (
+            file.size >
+            CONFIG.maxFileSize
+        ) {
 
             return {
                 valid: false,
-                message: "File is too large. Maximum size is 200 MB."
+                message:
+                    "File is too large. Maximum size is 200 MB."
             };
 
         }
 
 
-        const extension = getFileExtension(file.name);
+        const extension =
+            getFileExtension(
+                file.name
+            );
+
 
         const validType =
-            CONFIG.allowedImageTypes.includes(file.type) ||
-            CONFIG.allowedVideoTypes.includes(file.type);
+            CONFIG.allowedImageTypes.includes(
+                file.type
+            ) ||
+            CONFIG.allowedVideoTypes.includes(
+                file.type
+            );
+
 
         const validExtension =
-            CONFIG.allowedExtensions.includes(extension);
+            CONFIG.allowedExtensions.includes(
+                extension
+            );
 
 
-        if (!validType && !validExtension) {
+        if (
+            !validType &&
+            !validExtension
+        ) {
 
             return {
                 valid: false,
@@ -227,16 +514,26 @@ document.addEventListener("DOMContentLoaded", () => {
     function displaySelectedFile(file) {
 
         if (!fileSelected) {
+
             return;
+
         }
 
-        const size = formatFileSize(file.size);
+
+        const size =
+            formatFileSize(
+                file.size
+            );
+
 
         const type =
             file.type ||
             "Unknown media type";
 
-        fileSelected.style.display = "block";
+
+        fileSelected.style.display =
+            "block";
+
 
         fileSelected.innerHTML = `
             ✓ <strong>${escapeHTML(file.name)}</strong>
@@ -246,6 +543,19 @@ document.addEventListener("DOMContentLoaded", () => {
             </span>
         `;
 
+
+        /*
+         * Add selected state to upload area.
+         */
+
+        if (dropZone) {
+
+            dropZone.classList.add(
+                "file-selected"
+            );
+
+        }
+
     }
 
 
@@ -253,73 +563,101 @@ document.addEventListener("DOMContentLoaded", () => {
        START ANALYSIS
     ============================== */
 
-    scanButton.addEventListener("click", async () => {
+    if (scanButton) {
 
-        if (analysisInProgress) {
-            return;
-        }
+        scanButton.addEventListener(
+            "click",
+            async () => {
 
+                if (analysisInProgress) {
 
-        if (!selectedFile) {
+                    return;
 
-            showMessage(
-                "Please select an image or video first.",
-                "warning"
-            );
-
-            return;
-        }
+                }
 
 
-        analysisInProgress = true;
+                if (!selectedFile) {
 
-        setButtonState(
-            "Analyzing Media...",
-            true
+                    showMessage(
+                        "Please select an image or video first.",
+                        "warning"
+                    );
+
+                    return;
+
+                }
+
+
+                analysisInProgress = true;
+
+
+                setButtonState(
+                    "Analyzing Media...",
+                    true
+                );
+
+
+                try {
+
+                    const report =
+                        await performLocalAnalysis(
+                            selectedFile
+                        );
+
+
+                    displayAnalysisResult(
+                        report
+                    );
+
+                }
+
+                catch (error) {
+
+                    console.error(
+                        "DeepShield analysis error:",
+                        error
+                    );
+
+
+                    showMessage(
+                        "An error occurred while analyzing the media.",
+                        "error"
+                    );
+
+                }
+
+                finally {
+
+                    analysisInProgress =
+                        false;
+
+
+                    setButtonState(
+                        "Start AI Analysis",
+                        false
+                    );
+
+                }
+
+            }
         );
 
-
-        try {
-
-            const report =
-                await performLocalAnalysis(selectedFile);
-
-            displayAnalysisResult(report);
-
-        } catch (error) {
-
-            console.error(
-                "DeepShield analysis error:",
-                error
-            );
-
-            showMessage(
-                "An error occurred while analyzing the media.",
-                "error"
-            );
-
-        } finally {
-
-            analysisInProgress = false;
-
-            setButtonState(
-                "Start AI Analysis",
-                false
-            );
-
-        }
-
-    });
+    }
 
 
     /* ==============================
        LOCAL ANALYSIS ENGINE
     ============================== */
 
-    async function performLocalAnalysis(file) {
+    async function performLocalAnalysis(
+        file
+    ) {
 
         const metadata =
-            await inspectMedia(file);
+            await inspectMedia(
+                file
+            );
+
 
         const indicators =
             generateForensicIndicators(
@@ -327,17 +665,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 metadata
             );
 
-        /*
-         * IMPORTANT:
-         * This is NOT a real AI deepfake detector.
-         *
-         * The score currently represents
-         * a demonstration of the forensic
-         * analysis pipeline.
-         *
-         * A real trained AI model/API will
-         * be connected in a later stage.
-         */
 
         const score =
             calculateDemoScore(
@@ -349,13 +676,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
         return {
 
-            fileName: file.name,
+            fileName:
+                file.name,
 
-            fileSize: file.size,
+            fileSize:
+                file.size,
 
-            fileType: file.type,
+            fileType:
+                file.type,
 
-            mediaType: getMediaType(file),
+            mediaType:
+                getMediaType(
+                    file
+                ),
 
             metadata,
 
@@ -363,7 +696,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
             score,
 
-            risk: getRiskLevel(score),
+            risk:
+                getRiskLevel(
+                    score
+                ),
 
             generatedAt:
                 new Date().toISOString(),
@@ -385,25 +721,38 @@ document.addEventListener("DOMContentLoaded", () => {
         return new Promise(resolve => {
 
             const mediaType =
-                getMediaType(file);
+                getMediaType(
+                    file
+                );
 
 
-            if (mediaType === "image") {
+            /* ==========================
+               IMAGE
+            ========================== */
+
+            if (
+                mediaType === "image"
+            ) {
 
                 const image =
                     new Image();
 
+
                 const objectURL =
-                    URL.createObjectURL(file);
+                    URL.createObjectURL(
+                        file
+                    );
 
 
                 image.onload = () => {
 
                     const metadata = {
 
-                        width: image.naturalWidth,
+                        width:
+                            image.naturalWidth,
 
-                        height: image.naturalHeight,
+                        height:
+                            image.naturalHeight,
 
                         aspectRatio:
                             calculateAspectRatio(
@@ -412,7 +761,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             ),
 
                         format:
-                            file.type || "unknown"
+                            file.type ||
+                            "unknown"
 
                     };
 
@@ -422,7 +772,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     );
 
 
-                    resolve(metadata);
+                    resolve(
+                        metadata
+                    );
 
                 };
 
@@ -433,66 +785,92 @@ document.addEventListener("DOMContentLoaded", () => {
                         objectURL
                     );
 
+
                     resolve({
+
                         format:
-                            file.type || "unknown"
+                            file.type ||
+                            "unknown"
+
                     });
 
                 };
 
 
-                image.src = objectURL;
+                image.src =
+                    objectURL;
+
 
                 return;
+
             }
 
 
-            if (mediaType === "video") {
+            /* ==========================
+               VIDEO
+            ========================== */
+
+            if (
+                mediaType === "video"
+            ) {
 
                 const video =
-                    document.createElement("video");
-
-                const objectURL =
-                    URL.createObjectURL(file);
-
-                video.preload = "metadata";
-
-
-                video.onloadedmetadata = () => {
-
-                    const metadata = {
-
-                        width:
-                            video.videoWidth,
-
-                        height:
-                            video.videoHeight,
-
-                        duration:
-                            Number(
-                                video.duration.toFixed(2)
-                            ),
-
-                        aspectRatio:
-                            calculateAspectRatio(
-                                video.videoWidth,
-                                video.videoHeight
-                            ),
-
-                        format:
-                            file.type || "unknown"
-
-                    };
-
-
-                    URL.revokeObjectURL(
-                        objectURL
+                    document.createElement(
+                        "video"
                     );
 
 
-                    resolve(metadata);
+                const objectURL =
+                    URL.createObjectURL(
+                        file
+                    );
 
-                };
+
+                video.preload =
+                    "metadata";
+
+
+                video.onloadedmetadata =
+                    () => {
+
+                        const metadata = {
+
+                            width:
+                                video.videoWidth,
+
+                            height:
+                                video.videoHeight,
+
+                            duration:
+                                Number(
+                                    video.duration.toFixed(
+                                        2
+                                    )
+                                ),
+
+                            aspectRatio:
+                                calculateAspectRatio(
+                                    video.videoWidth,
+                                    video.videoHeight
+                                ),
+
+                            format:
+                                file.type ||
+                                "unknown"
+
+                        };
+
+
+                        URL.revokeObjectURL(
+                            objectURL
+                        );
+
+
+                        resolve(
+                            metadata
+                        );
+
+                    };
 
 
                 video.onerror = () => {
@@ -501,17 +879,24 @@ document.addEventListener("DOMContentLoaded", () => {
                         objectURL
                     );
 
+
                     resolve({
+
                         format:
-                            file.type || "unknown"
+                            file.type ||
+                            "unknown"
+
                     });
 
                 };
 
 
-                video.src = objectURL;
+                video.src =
+                    objectURL;
+
 
                 return;
+
             }
 
 
@@ -534,13 +919,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const indicators = [];
 
 
-        /*
-         * File structure indicator
-         */
-
         indicators.push({
 
-            name: "File Structure",
+            name:
+                "File Structure",
 
             status:
                 file.size > 0
@@ -555,11 +937,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
 
-        /*
-         * Resolution indicator
-         */
-
-        if (metadata.width && metadata.height) {
+        if (
+            metadata.width &&
+            metadata.height
+        ) {
 
             const pixels =
                 metadata.width *
@@ -568,7 +949,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             indicators.push({
 
-                name: "Media Resolution",
+                name:
+                    "Media Resolution",
 
                 status:
                     pixels >= 100000
@@ -585,11 +967,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        /*
-         * Aspect ratio indicator
-         */
-
-        if (metadata.aspectRatio) {
+        if (
+            metadata.aspectRatio
+        ) {
 
             const unusualRatio =
                 metadata.aspectRatio < 0.3 ||
@@ -598,7 +978,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             indicators.push({
 
-                name: "Aspect Ratio",
+                name:
+                    "Aspect Ratio",
 
                 status:
                     unusualRatio
@@ -615,17 +996,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        /*
-         * File extension indicator
-         */
-
         const extension =
-            getFileExtension(file.name);
+            getFileExtension(
+                file.name
+            );
 
 
         indicators.push({
 
-            name: "File Extension",
+            name:
+                "File Extension",
 
             status:
                 CONFIG.allowedExtensions.includes(
@@ -644,13 +1024,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
 
-        /*
-         * File size indicator
-         */
-
         indicators.push({
 
-            name: "File Size",
+            name:
+                "File Size",
 
             status:
                 file.size < 1024
@@ -695,17 +1072,20 @@ document.addEventListener("DOMContentLoaded", () => {
             suspicious.length * 7;
 
 
-        /*
-         * Larger media files receive
-         * a small neutral adjustment.
-         */
+        if (
+            file.size >
+            5 * 1024 * 1024
+        ) {
 
-        if (file.size > 5 * 1024 * 1024) {
             score += 2;
+
         }
 
 
-        if (metadata.width && metadata.height) {
+        if (
+            metadata.width &&
+            metadata.height
+        ) {
 
             if (
                 metadata.width >= 1920 &&
@@ -719,13 +1099,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        /*
-         * Keep the demonstration score
-         * within a reasonable range.
-         */
-
         return Math.min(
-            Math.max(score, 1),
+            Math.max(
+                score,
+                1
+            ),
             99
         );
 
@@ -739,12 +1117,18 @@ document.addEventListener("DOMContentLoaded", () => {
     function getRiskLevel(score) {
 
         if (score >= 75) {
+
             return "HIGH";
+
         }
 
+
         if (score >= 45) {
+
             return "MEDIUM";
+
         }
+
 
         return "LOW";
 
@@ -755,16 +1139,26 @@ document.addEventListener("DOMContentLoaded", () => {
        DISPLAY RESULT
     ============================== */
 
-    function displayAnalysisResult(report) {
+    function displayAnalysisResult(
+        report
+    ) {
 
-        if (!resultEmpty || !analysisResult) {
+        if (
+            !resultEmpty ||
+            !analysisResult
+        ) {
+
             return;
+
         }
 
 
-        resultEmpty.style.display = "none";
+        resultEmpty.style.display =
+            "none";
 
-        analysisResult.style.display = "block";
+
+        analysisResult.style.display =
+            "block";
 
 
         if (scoreElement) {
@@ -796,14 +1190,20 @@ document.addEventListener("DOMContentLoaded", () => {
        UPDATE RISK LABEL
     ============================== */
 
-    function updateRiskLabel(risk) {
+    function updateRiskLabel(
+        risk
+    ) {
 
         const riskElement =
-            analysisResult.querySelector(".risk");
+            analysisResult.querySelector(
+                ".risk"
+            );
 
 
         if (!riskElement) {
+
             return;
+
         }
 
 
@@ -828,43 +1228,65 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         if (!container) {
+
             return;
+
         }
 
 
-        container.innerHTML = "";
+        container.innerHTML =
+            "";
 
 
-        indicators.forEach(indicator => {
+        indicators.forEach(
+            indicator => {
 
-            const row =
-                document.createElement("div");
-
-            row.className =
-                "indicator";
-
-
-            const name =
-                document.createElement("span");
-
-            name.textContent =
-                indicator.name;
+                const row =
+                    document.createElement(
+                        "div"
+                    );
 
 
-            const value =
-                document.createElement("span");
-
-            value.textContent =
-                indicator.status;
+                row.className =
+                    "indicator";
 
 
-            row.appendChild(name);
+                const name =
+                    document.createElement(
+                        "span"
+                    );
 
-            row.appendChild(value);
 
-            container.appendChild(row);
+                name.textContent =
+                    indicator.name;
 
-        });
+
+                const value =
+                    document.createElement(
+                        "span"
+                    );
+
+
+                value.textContent =
+                    indicator.status;
+
+
+                row.appendChild(
+                    name
+                );
+
+
+                row.appendChild(
+                    value
+                );
+
+
+                container.appendChild(
+                    row
+                );
+
+            }
+        );
 
     }
 
@@ -873,7 +1295,9 @@ document.addEventListener("DOMContentLoaded", () => {
        ANALYSIS DETAILS
     ============================== */
 
-    function updateAnalysisDetails(report) {
+    function updateAnalysisDetails(
+        report
+    ) {
 
         let details =
             document.getElementById(
@@ -884,31 +1308,42 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!details) {
 
             details =
-                document.createElement("div");
+                document.createElement(
+                    "div"
+                );
+
 
             details.id =
                 "analysisDetails";
 
+
             details.style.marginTop =
                 "18px";
+
 
             details.style.padding =
                 "14px";
 
+
             details.style.borderRadius =
                 "12px";
+
 
             details.style.background =
                 "rgba(255,255,255,0.025)";
 
+
             details.style.border =
                 "1px solid rgba(255,255,255,0.06)";
+
 
             details.style.fontSize =
                 "11px";
 
+
             details.style.lineHeight =
                 "1.7";
+
 
             analysisResult.appendChild(
                 details
@@ -948,11 +1383,18 @@ document.addEventListener("DOMContentLoaded", () => {
     function resetAnalysis() {
 
         if (resultEmpty) {
-            resultEmpty.style.display = "flex";
+
+            resultEmpty.style.display =
+                "flex";
+
         }
 
+
         if (analysisResult) {
-            analysisResult.style.display = "none";
+
+            analysisResult.style.display =
+                "none";
+
         }
 
     }
@@ -966,14 +1408,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
         selectedFile = null;
 
-        fileInput.value = "";
+
+        fileInput.value =
+            "";
+
 
         if (fileSelected) {
-            fileSelected.style.display = "none";
-            fileSelected.textContent = "";
+
+            fileSelected.style.display =
+                "none";
+
+            fileSelected.textContent =
+                "";
+
         }
 
+
+        if (dropZone) {
+
+            dropZone.classList.remove(
+                "file-selected"
+            );
+
+        }
+
+
         resetAnalysis();
+
+
+        if (scanButton) {
+
+            scanButton.disabled =
+                false;
+
+            scanButton.style.opacity =
+                "1";
+
+            scanButton.style.cursor =
+                "pointer";
+
+        }
 
     }
 
@@ -987,16 +1461,26 @@ document.addEventListener("DOMContentLoaded", () => {
         disabled
     ) {
 
+        if (!scanButton) {
+
+            return;
+
+        }
+
+
         scanButton.textContent =
             text;
 
+
         scanButton.disabled =
             disabled;
+
 
         scanButton.style.opacity =
             disabled
                 ? "0.7"
                 : "1";
+
 
         scanButton.style.cursor =
             disabled
@@ -1015,19 +1499,20 @@ document.addEventListener("DOMContentLoaded", () => {
         type
     ) {
 
-        /*
-         * Use a simple browser notification
-         * for the first version.
-         *
-         * Later we will replace this with
-         * a professional in-app notification.
-         */
+        if (
+            type === "error"
+        ) {
 
-        if (type === "error") {
-            console.error(message);
+            console.error(
+                message
+            );
+
         }
 
-        alert(message);
+
+        alert(
+            message
+        );
 
     }
 
@@ -1036,11 +1521,15 @@ document.addEventListener("DOMContentLoaded", () => {
        MEDIA TYPE
     ============================== */
 
-    function getMediaType(file) {
+    function getMediaType(
+        file
+    ) {
 
         if (
             file.type &&
-            file.type.startsWith("image/")
+            file.type.startsWith(
+                "image/"
+            )
         ) {
 
             return "image";
@@ -1050,7 +1539,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (
             file.type &&
-            file.type.startsWith("video/")
+            file.type.startsWith(
+                "video/"
+            )
         ) {
 
             return "video";
@@ -1059,15 +1550,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         const extension =
-            getFileExtension(file.name);
+            getFileExtension(
+                file.name
+            );
 
 
         const imageExtensions = [
+
             ".jpg",
             ".jpeg",
             ".png",
             ".webp",
             ".gif"
+
         ];
 
 
@@ -1100,9 +1595,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 .toLowerCase()
                 .split(".");
 
-        if (parts.length < 2) {
+
+        if (
+            parts.length < 2
+        ) {
+
             return "";
+
         }
+
 
         return "." +
             parts.pop();
@@ -1119,29 +1620,38 @@ document.addEventListener("DOMContentLoaded", () => {
     ) {
 
         if (!bytes) {
+
             return "0 B";
+
         }
 
 
         const units = [
+
             "B",
             "KB",
             "MB",
             "GB"
+
         ];
 
 
-        let size = bytes;
+        let size =
+            bytes;
 
-        let index = 0;
+
+        let index =
+            0;
 
 
         while (
             size >= 1024 &&
-            index < units.length - 1
+            index <
+                units.length - 1
         ) {
 
-            size /= 1024;
+            size /=
+                1024;
 
             index++;
 
@@ -1149,7 +1659,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         return `${size.toFixed(
-            size >= 10 || index === 0
+            size >= 10 ||
+            index === 0
                 ? 0
                 : 1
         )} ${units[index]}`;
@@ -1166,13 +1677,21 @@ document.addEventListener("DOMContentLoaded", () => {
         height
     ) {
 
-        if (!width || !height) {
+        if (
+            !width ||
+            !height
+        ) {
+
             return null;
+
         }
 
 
         return Number(
-            (width / height).toFixed(3)
+            (
+                width /
+                height
+            ).toFixed(3)
         );
 
     }
@@ -1182,14 +1701,36 @@ document.addEventListener("DOMContentLoaded", () => {
        HTML ESCAPE
     ============================== */
 
-    function escapeHTML(value) {
+    function escapeHTML(
+        value
+    ) {
 
         return String(value)
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;")
-            .replaceAll("'", "&#039;");
+
+            .replaceAll(
+                "&",
+                "&amp;"
+            )
+
+            .replaceAll(
+                "<",
+                "&lt;"
+            )
+
+            .replaceAll(
+                ">",
+                "&gt;"
+            )
+
+            .replaceAll(
+                '"',
+                "&quot;"
+            )
+
+            .replaceAll(
+                "'",
+                "&#039;"
+            );
 
     }
 
@@ -1201,9 +1742,33 @@ document.addEventListener("DOMContentLoaded", () => {
     resetSelection();
 
 
+    /*
+     * Make sure the hidden file input
+     * accepts the supported formats.
+     */
+
+    fileInput.setAttribute(
+        "accept",
+        [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif",
+            "video/mp4",
+            "video/webm",
+            "video/quicktime",
+            "video/x-msvideo"
+        ].join(",")
+    );
+
+
     console.log(
         "DeepShield AI initialized successfully."
     );
 
+
+    console.log(
+        "Upload interface ready."
+    );
+
 });
-```
