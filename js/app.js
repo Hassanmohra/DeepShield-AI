@@ -1,11 +1,13 @@
 /* =========================================================
-   DeepShield AI - app.js
-   Version 0.4
-   Real AI Deepfake Detection + Digital Forensics
+   DeepShield AI
+   app.js — v0.5
+   AI Deepfake Detection + Digital Forensics
    ========================================================= */
 
-import { pipeline, env } from
-    "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.1";
+import {
+    pipeline,
+    env
+} from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.1";
 
 /* =========================================================
    CONFIGURATION
@@ -14,279 +16,181 @@ import { pipeline, env } from
 const CONFIG = {
     modelId: "onnx-community/Deep-Fake-Detector-v2-Model-ONNX",
 
-    maxFileSizeMB: 200,
+    maxFileSize: 200 * 1024 * 1024,
 
-    supportedImages: [
+    allowedImageTypes: [
         "image/jpeg",
+        "image/jpg",
         "image/png",
         "image/webp",
         "image/bmp"
     ],
 
-    supportedVideos: [
+    allowedVideoTypes: [
         "video/mp4",
         "video/webm",
-        "video/quicktime"
+        "video/quicktime",
+        "video/x-msvideo"
     ]
 };
 
 /* =========================================================
-   HUGGING FACE / TRANSFORMERS.JS
+   TRANSFORMERS.JS SETTINGS
    ========================================================= */
 
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
+/* =========================================================
+   GLOBAL STATE
+   ========================================================= */
+
 let aiClassifier = null;
-let aiModelLoading = false;
-let aiModelReady = false;
+let selectedFile = null;
+let modelLoading = false;
 
 /* =========================================================
    DOM HELPERS
    ========================================================= */
 
-const $ = (selector) => document.querySelector(selector);
+function $(selector) {
+    return document.querySelector(selector);
+}
 
-function setText(selector, value) {
-    const element = $(selector);
+function $all(selector) {
+    return [...document.querySelectorAll(selector)];
+}
+
+function firstExisting(selectors) {
+    for (const selector of selectors) {
+        const element = document.querySelector(selector);
+
+        if (element) {
+            return element;
+        }
+    }
+
+    return null;
+}
+
+/* =========================================================
+   FIND IMPORTANT ELEMENTS
+   ========================================================= */
+
+function getFileInput() {
+    return firstExisting([
+        "#fileInput",
+        "#file",
+        "#uploadInput",
+        "#mediaInput",
+        'input[type="file"]'
+    ]);
+}
+
+function getDropZone() {
+    return firstExisting([
+        "#dropZone",
+        "#uploadArea",
+        "#uploadBox",
+        "#dropArea",
+        ".drop-zone",
+        ".upload-area",
+        ".upload-box",
+        ".upload-container",
+        ".file-drop-zone"
+    ]);
+}
+
+function getAnalyzeButton() {
+    return firstExisting([
+        "#analyzeBtn",
+        "#scanBtn",
+        "#analyzeButton",
+        "#startAnalysis",
+        ".analyze-btn"
+    ]);
+}
+
+/* =========================================================
+   STATUS MESSAGE
+   ========================================================= */
+
+function setStatus(message, type = "normal") {
+
+    const elements = [
+        "#uploadStatus",
+        "#status",
+        "#analysisStatus",
+        ".upload-status",
+        ".status-message"
+    ];
+
+    const element = firstExisting(elements);
+
+    if (!element) {
+        console.log(`[DeepShield ${type}]`, message);
+        return;
+    }
+
+    element.textContent = message;
+
+    element.dataset.status = type;
+}
+
+/* =========================================================
+   SELECTED FILE DISPLAY
+   ========================================================= */
+
+function displaySelectedFile(file) {
+
+    const elements = [
+        "#selectedFile",
+        "#fileName",
+        "#selectedFileName",
+        ".selected-file",
+        ".file-name"
+    ];
+
+    const element = firstExisting(elements);
 
     if (element) {
-        element.textContent = value;
+        element.textContent =
+            `${file.name} • ${formatBytes(file.size)}`;
+    }
+
+    const sizeElement = firstExisting([
+        "#fileSize",
+        ".file-size"
+    ]);
+
+    if (sizeElement) {
+        sizeElement.textContent = formatBytes(file.size);
     }
 }
 
-function setHTML(selector, value) {
-    const element = $(selector);
-
-    if (element) {
-        element.innerHTML = value;
-    }
-}
-
 /* =========================================================
-   DOM ELEMENTS
+   FILE SIZE
    ========================================================= */
 
-const fileInput =
-    $("#fileInput") ||
-    $("#file") ||
-    document.querySelector('input[type="file"]');
+function formatBytes(bytes) {
 
-const dropZone =
-    $("#dropZone") ||
-    $(".drop-zone") ||
-    $("#uploadArea") ||
-    $(".upload-area");
-
-const analyzeButton =
-    $("#analyzeBtn") ||
-    $("#scanBtn") ||
-    $("#analyzeButton");
-
-const fileNameElement =
-    $("#fileName") ||
-    $("#selectedFileName");
-
-const resultSection =
-    $("#resultSection") ||
-    $("#results") ||
-    $("#analysisResult");
-
-const aiConfidence =
-    $("#aiConfidence");
-
-const aiStatus =
-    $("#aiStatus");
-
-const aiModelName =
-    $("#aiModelName");
-
-const aiClassification =
-    $("#aiClassification");
-
-const scoreElement =
-    $("#score");
-
-const riskElement =
-    $("#riskLevel") ||
-    $(".risk");
-
-const overallAssessment =
-    $("#overallAssessment");
-
-const analysisDetails =
-    $("#analysisDetails") ||
-    $("#forensicDetails");
-
-/* =========================================================
-   STATE
-   ========================================================= */
-
-let selectedFile = null;
-let selectedImage = null;
-let forensicResult = null;
-let aiResult = null;
-
-/* =========================================================
-   INITIALIZATION
-   ========================================================= */
-
-document.addEventListener("DOMContentLoaded", () => {
-    initializeDeepShield();
-});
-
-function initializeDeepShield() {
-
-    setupFileInput();
-    setupDropZone();
-    setupAnalyzeButton();
-
-    resetUI();
-
-    /*
-     * Start loading the real AI model.
-     * The model is downloaded only when required.
-     */
-    preloadAIModel();
-}
-
-/* =========================================================
-   FILE INPUT
-   ========================================================= */
-
-function setupFileInput() {
-
-    if (!fileInput) {
-        console.warn("DeepShield: file input not found.");
-        return;
+    if (!Number.isFinite(bytes)) {
+        return "0 B";
     }
 
-    fileInput.addEventListener("change", (event) => {
-
-        const file =
-            event.target.files &&
-            event.target.files[0];
-
-        if (file) {
-            handleFile(file);
-        }
-    });
-}
-
-/* =========================================================
-   DROP ZONE
-   ========================================================= */
-
-function setupDropZone() {
-
-    if (!dropZone) {
-        return;
+    if (bytes < 1024) {
+        return `${bytes} B`;
     }
 
-    dropZone.addEventListener("click", () => {
-
-        if (fileInput) {
-            fileInput.click();
-        }
-
-    });
-
-    dropZone.addEventListener("dragover", (event) => {
-
-        event.preventDefault();
-
-        dropZone.classList.add("drag-over");
-
-    });
-
-    dropZone.addEventListener("dragleave", () => {
-
-        dropZone.classList.remove("drag-over");
-
-    });
-
-    dropZone.addEventListener("drop", (event) => {
-
-        event.preventDefault();
-
-        dropZone.classList.remove("drag-over");
-
-        const file =
-            event.dataTransfer.files &&
-            event.dataTransfer.files[0];
-
-        if (file) {
-            handleFile(file);
-        }
-    });
-}
-
-/* =========================================================
-   ANALYZE BUTTON
-   ========================================================= */
-
-function setupAnalyzeButton() {
-
-    if (!analyzeButton) {
-        console.warn("DeepShield: analyze button not found.");
-        return;
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
     }
 
-    analyzeButton.addEventListener("click", async () => {
-
-        if (!selectedFile) {
-            showMessage("Please select an image first.");
-            return;
-        }
-
-        await analyzeSelectedFile();
-
-    });
-}
-
-/* =========================================================
-   FILE HANDLING
-   ========================================================= */
-
-function handleFile(file) {
-
-    clearMessage();
-
-    const validation =
-        validateFile(file);
-
-    if (!validation.valid) {
-
-        showMessage(validation.message);
-
-        selectedFile = null;
-        selectedImage = null;
-
-        return;
+    if (bytes < 1024 * 1024 * 1024) {
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
-    selectedFile = file;
-
-    updateSelectedFileUI(file);
-
-    /*
-     * Images can be analyzed by the AI model.
-     * Videos currently use forensic metadata only.
-     */
-
-    if (file.type.startsWith("image/")) {
-
-        loadSelectedImage(file);
-
-    } else {
-
-        selectedImage = null;
-
-    }
-
-    if (analyzeButton) {
-        analyzeButton.disabled = false;
-    }
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 /* =========================================================
@@ -296,365 +200,510 @@ function handleFile(file) {
 function validateFile(file) {
 
     if (!file) {
-
         return {
             valid: false,
-            message: "No file selected."
+            message: "لم يتم اختيار ملف."
         };
-
     }
 
-    const sizeMB =
-        file.size / (1024 * 1024);
-
-    if (sizeMB > CONFIG.maxFileSizeMB) {
+    if (file.size > CONFIG.maxFileSize) {
 
         return {
             valid: false,
-            message:
-                `File is too large. Maximum size is ${CONFIG.maxFileSizeMB} MB.`
+            message: "حجم الملف أكبر من 200 MB."
         };
-
     }
 
-    const validType =
-        CONFIG.supportedImages.includes(file.type) ||
-        CONFIG.supportedVideos.includes(file.type);
+    const isImage =
+        CONFIG.allowedImageTypes.includes(file.type);
 
-    if (!validType) {
+    const isVideo =
+        CONFIG.allowedVideoTypes.includes(file.type);
 
-        return {
-            valid: false,
-            message:
-                "Unsupported file type. Please upload JPG, PNG, WEBP, BMP, MP4 or WEBM."
-        };
+    if (!isImage && !isVideo) {
 
+        const extension =
+            file.name.split(".").pop()?.toLowerCase();
+
+        const allowedExtensions = [
+            "jpg",
+            "jpeg",
+            "png",
+            "webp",
+            "bmp",
+            "mp4",
+            "webm",
+            "mov",
+            "avi"
+        ];
+
+        if (!allowedExtensions.includes(extension)) {
+
+            return {
+                valid: false,
+                message: "نوع الملف غير مدعوم."
+            };
+        }
     }
 
     return {
-        valid: true
+        valid: true,
+        message: "الملف صالح للتحليل."
     };
 }
 
 /* =========================================================
-   SELECTED FILE UI
+   HANDLE FILE
    ========================================================= */
 
-function updateSelectedFileUI(file) {
+async function handleFile(file) {
 
-    if (fileNameElement) {
+    const validation = validateFile(file);
 
-        fileNameElement.textContent =
-            `${file.name} (${formatBytes(file.size)})`;
+    if (!validation.valid) {
 
-    }
+        setStatus(validation.message, "error");
 
-    /*
-     * Optional common elements.
-     */
+        alert(validation.message);
 
-    setText("#selectedFile", file.name);
-    setText("#fileSize", formatBytes(file.size));
-    setText("#fileType", file.type || "Unknown");
-}
-
-/* =========================================================
-   IMAGE LOADING
-   ========================================================= */
-
-function loadSelectedImage(file) {
-
-    const reader =
-        new FileReader();
-
-    reader.onload = () => {
-
-        const image =
-            new Image();
-
-        image.onload = () => {
-
-            selectedImage = image;
-
-        };
-
-        image.src =
-            reader.result;
-    };
-
-    reader.readAsDataURL(file);
-}
-
-/* =========================================================
-   MAIN ANALYSIS
-   ========================================================= */
-
-async function analyzeSelectedFile() {
-
-    if (!selectedFile) {
         return;
     }
 
-    showLoadingState();
+    selectedFile = file;
 
-    try {
+    displaySelectedFile(file);
 
-        /*
-         * -----------------------------------------
-         * 1. DIGITAL FORENSICS
-         * -----------------------------------------
-         */
+    setStatus(
+        `تم اختيار الملف: ${file.name}`,
+        "success"
+    );
 
-        forensicResult =
-            await runForensicAnalysis(selectedFile);
+    const analyzeButton = getAnalyzeButton();
 
-        /*
-         * -----------------------------------------
-         * 2. REAL AI DETECTION
-         * -----------------------------------------
-         */
+    if (analyzeButton) {
+        analyzeButton.disabled = false;
+        analyzeButton.removeAttribute("disabled");
+    }
 
-        if (selectedFile.type.startsWith("image/")) {
+    console.log("DeepShield selected:", file);
 
-            aiResult =
-                await runAIDetection(selectedFile);
+    /* تحليل تلقائي */
+    if (file.type.startsWith("image/")) {
 
-        } else {
-
-            aiResult = {
-                available: false,
-                confidence: null,
-                label: "Video AI analysis unavailable",
-                model: CONFIG.modelId,
-                message:
-                    "Video frame analysis is not enabled in this version."
-            };
-
+        try {
+            await analyzeFile(file);
+        } catch (error) {
+            console.error(error);
         }
-
-        /*
-         * -----------------------------------------
-         * 3. DISPLAY RESULTS
-         * -----------------------------------------
-         */
-
-        displayResults(
-            selectedFile,
-            forensicResult,
-            aiResult
-        );
-
-    } catch (error) {
-
-        console.error(
-            "DeepShield analysis error:",
-            error
-        );
-
-        showMessage(
-            "Analysis failed. Please try another file."
-        );
-
-        hideLoadingState();
     }
 }
 
 /* =========================================================
-   REAL AI MODEL
+   FILE INPUT
    ========================================================= */
 
-async function preloadAIModel() {
+function setupFileInput() {
+
+    const input = getFileInput();
+
+    if (!input) {
+
+        console.warn(
+            "DeepShield: file input not found."
+        );
+
+        return;
+    }
+
+    input.addEventListener("change", async event => {
+
+        const file =
+            event.target.files?.[0];
+
+        if (!file) {
+            return;
+        }
+
+        await handleFile(file);
+    });
+}
+
+/* =========================================================
+   DRAG & DROP
+   ========================================================= */
+
+function setupDragAndDrop() {
+
+    const dropZone = getDropZone();
+
+    if (!dropZone) {
+
+        console.warn(
+            "DeepShield: drop zone not found."
+        );
+
+        return;
+    }
+
+    console.log(
+        "DeepShield: Drag & Drop enabled."
+    );
+
+    /* Click */
+    dropZone.addEventListener("click", event => {
+
+        if (
+            event.target.closest(
+                "input, button, a"
+            )
+        ) {
+            return;
+        }
+
+        const input = getFileInput();
+
+        if (input) {
+            input.click();
+        }
+    });
+
+    /* Drag enter */
+    dropZone.addEventListener(
+        "dragenter",
+        event => {
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            dropZone.classList.add(
+                "drag-over"
+            );
+        }
+    );
+
+    /* Drag over */
+    dropZone.addEventListener(
+        "dragover",
+        event => {
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (
+                event.dataTransfer
+            ) {
+                event.dataTransfer.dropEffect =
+                    "copy";
+            }
+
+            dropZone.classList.add(
+                "drag-over"
+            );
+        }
+    );
+
+    /* Drag leave */
+    dropZone.addEventListener(
+        "dragleave",
+        event => {
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (
+                event.relatedTarget &&
+                dropZone.contains(
+                    event.relatedTarget
+                )
+            ) {
+                return;
+            }
+
+            dropZone.classList.remove(
+                "drag-over"
+            );
+        }
+    );
+
+    /* Drop */
+    dropZone.addEventListener(
+        "drop",
+        async event => {
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            dropZone.classList.remove(
+                "drag-over"
+            );
+
+            const files =
+                event.dataTransfer?.files;
+
+            if (!files || files.length === 0) {
+
+                setStatus(
+                    "لم يتم العثور على ملف.",
+                    "error"
+                );
+
+                return;
+            }
+
+            const file = files[0];
+
+            await handleFile(file);
+        }
+    );
+}
+
+/* =========================================================
+   GLOBAL DRAG PREVENTION
+   ========================================================= */
+
+function setupGlobalDragProtection() {
+
+    [
+        "dragenter",
+        "dragover",
+        "dragleave",
+        "drop"
+    ].forEach(eventName => {
+
+        document.addEventListener(
+            eventName,
+            event => {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+            },
+            false
+        );
+    });
+
+    /* إعادة تفعيل Drop Zone بعد الحماية العامة */
+
+    const dropZone = getDropZone();
+
+    if (dropZone) {
+
+        [
+            "dragenter",
+            "dragover",
+            "drop"
+        ].forEach(eventName => {
+
+            dropZone.addEventListener(
+                eventName,
+                event => {
+
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                },
+                false
+            );
+        });
+    }
+}
+
+/* =========================================================
+   LOAD AI MODEL
+   ========================================================= */
+
+async function loadAIModel() {
+
+    if (aiClassifier) {
+        return aiClassifier;
+    }
+
+    if (modelLoading) {
+        return null;
+    }
+
+    modelLoading = true;
+
+    updateAIStatus(
+        "Loading AI model..."
+    );
+
+    console.log(
+        "DeepShield: Loading AI model..."
+    );
 
     try {
 
-        setAIStatus(
-            "Loading AI model..."
+        aiClassifier = await pipeline(
+            "image-classification",
+            CONFIG.modelId,
+            {
+                device: "wasm"
+            }
         );
 
-        aiModelLoading = true;
-
-        aiClassifier =
-            await pipeline(
-                "image-classification",
-                CONFIG.modelId,
-                {
-                    device: "wasm"
-                }
-            );
-
-        aiModelReady = true;
-        aiModelLoading = false;
-
-        setAIStatus(
-            "AI model ready"
+        updateAIStatus(
+            "AI model ready."
         );
 
         console.log(
-            "DeepShield AI model loaded:",
-            CONFIG.modelId
+            "DeepShield: AI model loaded."
         );
+
+        return aiClassifier;
 
     } catch (error) {
 
-        aiModelLoading = false;
-        aiModelReady = false;
-
         console.error(
-            "Failed to load AI model:",
+            "DeepShield AI model error:",
             error
         );
 
-        setAIStatus(
-            "AI model could not be loaded"
+        updateAIStatus(
+            "AI model could not be loaded."
         );
+
+        aiClassifier = null;
+
+        return null;
+
+    } finally {
+
+        modelLoading = false;
     }
 }
 
 /* =========================================================
-   AI DETECTION
+   AI STATUS
    ========================================================= */
 
-async function runAIDetection(file) {
+function updateAIStatus(message) {
 
-    /*
-     * Make sure the model exists.
-     */
+    const status = firstExisting([
+        "#aiStatus",
+        "#modelStatus",
+        ".ai-status"
+    ]);
 
-    if (!aiModelReady) {
-
-        if (!aiModelLoading) {
-            await preloadAIModel();
-        }
-
+    if (status) {
+        status.textContent = message;
     }
 
-    if (!aiClassifier) {
+    console.log(
+        "DeepShield AI:",
+        message
+    );
+}
+
+/* =========================================================
+   IMAGE OBJECT URL
+   ========================================================= */
+
+function createImageURL(file) {
+
+    return URL.createObjectURL(file);
+}
+
+/* =========================================================
+   AI IMAGE CLASSIFICATION
+   ========================================================= */
+
+async function runAIAnalysis(file) {
+
+    if (!file.type.startsWith("image/")) {
 
         return {
-
             available: false,
-
-            confidence: null,
-
-            label:
-                "AI Model Unavailable",
-
-            model:
-                CONFIG.modelId,
-
-            message:
-                "The real AI model could not be loaded."
-
+            label: "Video analysis",
+            confidence: null
         };
     }
 
+    const classifier =
+        await loadAIModel();
+
+    if (!classifier) {
+
+        return {
+            available: false,
+            label: "AI unavailable",
+            confidence: null
+        };
+    }
+
+    const imageURL =
+        createImageURL(file);
+
     try {
 
-        setAIStatus(
-            "Running AI detection..."
-        );
-
-        /*
-         * Transformers.js accepts the image
-         * directly through a Blob URL.
-         */
-
-        const imageURL =
-            URL.createObjectURL(file);
-
-        const output =
-            await aiClassifier(imageURL);
-
-        URL.revokeObjectURL(imageURL);
+        const results =
+            await classifier(imageURL);
 
         console.log(
-            "DeepShield AI raw output:",
-            output
+            "DeepShield AI result:",
+            results
         );
 
-        if (!output || !output.length) {
+        if (
+            !results ||
+            !Array.isArray(results) ||
+            results.length === 0
+        ) {
 
             return {
-
                 available: false,
-
-                confidence: null,
-
-                label:
-                    "No AI result",
-
-                model:
-                    CONFIG.modelId,
-
-                message:
-                    "The AI model returned no classification."
-
+                label: "No result",
+                confidence: null
             };
         }
 
-        /*
-         * Sort by confidence.
-         */
-
         const sorted =
-            [...output].sort(
+            [...results].sort(
                 (a, b) =>
-                    Number(b.score) -
-                    Number(a.score)
+                    b.score - a.score
             );
 
         const top =
             sorted[0];
 
-        const rawLabel =
-            String(
-                top.label || ""
-            ).toLowerCase();
+        const label =
+            String(top.label || "")
+                .toLowerCase();
 
-        /*
-         * Model labels may appear as:
-         *
-         * Realism
-         * Deepfake
-         * LABEL_0
-         * LABEL_1
-         */
+        let classification =
+            "Unknown";
 
-        let normalizedLabel =
-            normalizeAIClassification(
-                rawLabel
-            );
+        if (
+            label.includes("deepfake") ||
+            label.includes("fake")
+        ) {
 
-        const confidence =
-            Math.round(
-                Number(top.score) * 100
-            );
+            classification =
+                "Potential Deepfake";
 
-        setAIStatus(
-            "AI analysis complete"
-        );
+        } else if (
+            label.includes("realism") ||
+            label.includes("real")
+        ) {
+
+            classification =
+                "Likely Authentic";
+        }
 
         return {
 
             available: true,
 
-            confidence,
+            label: classification,
 
-            label:
-                normalizedLabel,
+            rawLabel: top.label,
 
-            rawLabel:
-                top.label,
+            confidence:
+                Math.round(
+                    top.score * 100
+                ),
 
-            model:
-                CONFIG.modelId,
-
-            allResults:
-                sorted,
-
-            message:
-                "Classification generated by the trained AI model."
-
+            results: sorted
         };
 
     } catch (error) {
@@ -664,147 +713,83 @@ async function runAIDetection(file) {
             error
         );
 
-        setAIStatus(
-            "AI inference failed"
-        );
-
         return {
-
             available: false,
-
-            confidence: null,
-
-            label:
-                "AI inference failed",
-
-            model:
-                CONFIG.modelId,
-
-            message:
-                error.message ||
-                "The AI model failed during inference."
-
+            label: "AI inference failed",
+            confidence: null
         };
+
+    } finally {
+
+        URL.revokeObjectURL(
+            imageURL
+        );
     }
 }
 
 /* =========================================================
-   AI LABEL NORMALIZATION
+   LOAD IMAGE
    ========================================================= */
 
-function normalizeAIClassification(label) {
+function loadImage(file) {
 
-    const normalized =
-        label.toLowerCase().trim();
+    return new Promise(
+        (resolve, reject) => {
 
-    /*
-     * Explicit Deepfake label.
-     */
+            const image =
+                new Image();
 
-    if (
-        normalized.includes("deepfake") ||
-        normalized.includes("fake") ||
-        normalized.includes("forged") ||
-        normalized === "1" ||
-        normalized === "label_1"
-    ) {
+            const url =
+                URL.createObjectURL(file);
 
-        return "Deepfake";
+            image.onload = () => {
 
-    }
+                URL.revokeObjectURL(url);
 
-    /*
-     * Explicit Realism label.
-     */
+                resolve(image);
+            };
 
-    if (
-        normalized.includes("realism") ||
-        normalized.includes("real") ||
-        normalized === "0" ||
-        normalized === "label_0"
-    ) {
+            image.onerror = () => {
 
-        return "Realism";
+                URL.revokeObjectURL(url);
 
-    }
+                reject(
+                    new Error(
+                        "Unable to load image."
+                    )
+                );
+            };
 
-    return label || "Unknown";
+            image.src = url;
+        }
+    );
 }
 
 /* =========================================================
-   FORENSIC ANALYSIS
+   CANVAS
    ========================================================= */
 
-async function runForensicAnalysis(file) {
-
-    const base =
-        createBaseForensicResult(file);
-
-    if (!file.type.startsWith("image/")) {
-
-        return {
-
-            ...base,
-
-            score: 0,
-
-            risk: "LOW",
-
-            indicators: [],
-
-            metrics: {},
-
-            videoMode: true
-
-        };
-    }
-
-    const image =
-        selectedImage ||
-        await loadImageFromFile(file);
-
-    if (!image) {
-
-        return {
-
-            ...base,
-
-            score: 0,
-
-            risk: "LOW",
-
-            indicators: [],
-
-            metrics: {}
-
-        };
-    }
-
-    /*
-     * Limit canvas dimensions for performance.
-     */
-
-    const MAX_SIZE = 512;
+function createAnalysisCanvas(
+    image,
+    maxSize = 512
+) {
 
     const scale =
         Math.min(
             1,
-            MAX_SIZE /
-            Math.max(
-                image.naturalWidth ||
-                image.width,
-
-                image.naturalHeight ||
-                image.height
-            )
+            maxSize /
+                Math.max(
+                    image.naturalWidth,
+                    image.naturalHeight
+                )
         );
 
     const width =
         Math.max(
             1,
             Math.round(
-                (image.naturalWidth ||
-                    image.width) * scale
+                image.naturalWidth *
+                    scale
             )
         );
 
@@ -812,23 +797,29 @@ async function runForensicAnalysis(file) {
         Math.max(
             1,
             Math.round(
-                (image.naturalHeight ||
-                    image.height) * scale
+                image.naturalHeight *
+                    scale
             )
         );
 
     const canvas =
-        document.createElement("canvas");
+        document.createElement(
+            "canvas"
+        );
 
     canvas.width = width;
     canvas.height = height;
 
-    const ctx =
-        canvas.getContext("2d", {
-            willReadFrequently: true
-        });
+    const context =
+        canvas.getContext(
+            "2d",
+            {
+                willReadFrequently:
+                    true
+            }
+        );
 
-    ctx.drawImage(
+    context.drawImage(
         image,
         0,
         0,
@@ -836,8 +827,31 @@ async function runForensicAnalysis(file) {
         height
     );
 
+    return {
+        canvas,
+        context,
+        width,
+        height
+    };
+}
+
+/* =========================================================
+   FORENSIC METRICS
+   ========================================================= */
+
+function calculateForensicMetrics(
+    image
+) {
+
+    const {
+        canvas,
+        context,
+        width,
+        height
+    } = createAnalysisCanvas(image);
+
     const imageData =
-        ctx.getImageData(
+        context.getImageData(
             0,
             0,
             width,
@@ -847,323 +861,336 @@ async function runForensicAnalysis(file) {
     const pixels =
         imageData.data;
 
-    const metrics =
-        calculateImageMetrics(
-            pixels,
-            width,
-            height
-        );
+    let totalR = 0;
+    let totalG = 0;
+    let totalB = 0;
 
-    const indicators =
-        calculateForensicIndicators(
-            file,
-            width,
-            height,
-            metrics
-        );
+    let totalLuma = 0;
+    let totalLumaSq = 0;
 
-    const score =
-        calculateForensicScore(
-            indicators
-        );
+    let totalSaturation = 0;
 
-    const risk =
-        getRiskLevel(score);
-
-    return {
-
-        ...base,
-
-        score,
-
-        risk,
-
-        indicators,
-
-        metrics,
-
-        width,
-
-        height
-
-    };
-}
-
-/* =========================================================
-   BASE FORENSIC DATA
-   ========================================================= */
-
-function createBaseForensicResult(file) {
-
-    return {
-
-        fileName:
-            file.name,
-
-        type:
-            file.type || "unknown",
-
-        size:
-            file.size,
-
-        extension:
-            getFileExtension(
-                file.name
-            ),
-
-        originalSize:
-            file.size
-
-    };
-}
-
-/* =========================================================
-   LOAD IMAGE
-   ========================================================= */
-
-function loadImageFromFile(file) {
-
-    return new Promise((resolve) => {
-
-        const reader =
-            new FileReader();
-
-        reader.onload = () => {
-
-            const image =
-                new Image();
-
-            image.onload = () => {
-                resolve(image);
-            };
-
-            image.onerror = () => {
-                resolve(null);
-            };
-
-            image.src =
-                reader.result;
-        };
-
-        reader.onerror = () => {
-            resolve(null);
-        };
-
-        reader.readAsDataURL(file);
-
-    });
-}
-
-/* =========================================================
-   PIXEL METRICS
-   ========================================================= */
-
-function calculateImageMetrics(
-    pixels,
-    width,
-    height
-) {
-
-    let redSum = 0;
-    let greenSum = 0;
-    let blueSum = 0;
-
-    let luminanceSum = 0;
-    let luminanceSquaredSum = 0;
-
-    let saturationSum = 0;
-
-    let edgeSum = 0;
-    let edgeCount = 0;
-
-    let noiseSum = 0;
-    let noiseCount = 0;
+    let pixelCount = width * height;
 
     const histogram =
         new Array(256).fill(0);
 
-    /*
-     * First pass.
-     */
+    let edgeStrength = 0;
+    let edgeSamples = 0;
+
+    let noiseTotal = 0;
+    let noiseSamples = 0;
+
+    let blockDifference = 0;
+    let blockSamples = 0;
+
+    /* -----------------------------------------
+       First pass
+       ----------------------------------------- */
 
     for (
-        let i = 0;
-        i < pixels.length;
-        i += 4
-    ) {
-
-        const r =
-            pixels[i];
-
-        const g =
-            pixels[i + 1];
-
-        const b =
-            pixels[i + 2];
-
-        redSum += r;
-        greenSum += g;
-        blueSum += b;
-
-        const luminance =
-            0.2126 * r +
-            0.7152 * g +
-            0.0722 * b;
-
-        luminanceSum +=
-            luminance;
-
-        luminanceSquaredSum +=
-            luminance *
-            luminance;
-
-        const max =
-            Math.max(r, g, b);
-
-        const min =
-            Math.min(r, g, b);
-
-        const saturation =
-            max === 0
-                ? 0
-                : (max - min) / max;
-
-        saturationSum +=
-            saturation;
-
-        histogram[
-            Math.round(
-                luminance
-            )
-        ]++;
-    }
-
-    const pixelCount =
-        pixels.length / 4;
-
-    const redMean =
-        redSum / pixelCount;
-
-    const greenMean =
-        greenSum / pixelCount;
-
-    const blueMean =
-        blueSum / pixelCount;
-
-    const luminanceMean =
-        luminanceSum /
-        pixelCount;
-
-    const luminanceVariance =
-        Math.max(
-            0,
-            luminanceSquaredSum /
-                pixelCount -
-                luminanceMean *
-                luminanceMean
-        );
-
-    const luminanceStd =
-        Math.sqrt(
-            luminanceVariance
-        );
-
-    const saturationMean =
-        saturationSum /
-        pixelCount;
-
-    /*
-     * Edge strength.
-     */
-
-    for (
-        let y = 1;
+        let y = 0;
         y < height;
         y++
     ) {
 
         for (
-            let x = 1;
+            let x = 0;
             x < width;
             x++
         ) {
 
-            const current =
-                getPixelLuminance(
-                    pixels,
-                    width,
-                    x,
-                    y
-                );
+            const index =
+                (y * width + x) * 4;
 
-            const left =
-                getPixelLuminance(
-                    pixels,
-                    width,
-                    x - 1,
-                    y
-                );
+            const r =
+                pixels[index];
 
-            const top =
-                getPixelLuminance(
-                    pixels,
-                    width,
-                    x,
-                    y - 1
-                );
+            const g =
+                pixels[index + 1];
 
-            const dx =
-                Math.abs(
-                    current -
-                    left
-                );
+            const b =
+                pixels[index + 2];
 
-            const dy =
-                Math.abs(
-                    current -
-                    top
-                );
+            totalR += r;
+            totalG += g;
+            totalB += b;
 
-            const edge =
-                (dx + dy) / 2;
+            const max =
+                Math.max(r, g, b);
 
-            edgeSum += edge;
+            const min =
+                Math.min(r, g, b);
 
-            edgeCount++;
+            const saturation =
+                max === 0
+                    ? 0
+                    : (max - min) / max;
 
-            /*
-             * Simple local noise estimate.
-             */
+            totalSaturation +=
+                saturation;
 
-            const prediction =
-                (
-                    left +
-                    top
-                ) / 2;
+            const luma =
+                0.2126 * r +
+                0.7152 * g +
+                0.0722 * b;
 
-            noiseSum +=
-                Math.abs(
-                    current -
-                    prediction
-                );
+            totalLuma += luma;
+            totalLumaSq +=
+                luma * luma;
 
-            noiseCount++;
+            histogram[
+                Math.max(
+                    0,
+                    Math.min(
+                        255,
+                        Math.round(luma)
+                    )
+                )
+            ]++;
         }
     }
 
-    const edgeStrength =
-        edgeCount
-            ? edgeSum / edgeCount
+    /* -----------------------------------------
+       Mean values
+       ----------------------------------------- */
+
+    const meanR =
+        totalR / pixelCount;
+
+    const meanG =
+        totalG / pixelCount;
+
+    const meanB =
+        totalB / pixelCount;
+
+    const meanLuma =
+        totalLuma / pixelCount;
+
+    const variance =
+        Math.max(
+            0,
+            totalLumaSq /
+                pixelCount -
+                meanLuma *
+                    meanLuma
+        );
+
+    const lumaStd =
+        Math.sqrt(variance);
+
+    const saturation =
+        (
+            totalSaturation /
+            pixelCount
+        ) * 100;
+
+    /* -----------------------------------------
+       Edge / noise / blockiness
+       ----------------------------------------- */
+
+    for (
+        let y = 1;
+        y < height - 1;
+        y++
+    ) {
+
+        for (
+            let x = 1;
+            x < width - 1;
+            x++
+        ) {
+
+            const centerIndex =
+                (y * width + x) * 4;
+
+            const leftIndex =
+                (y * width + x - 1) * 4;
+
+            const rightIndex =
+                (y * width + x + 1) * 4;
+
+            const topIndex =
+                ((y - 1) * width + x) * 4;
+
+            const bottomIndex =
+                ((y + 1) * width + x) * 4;
+
+            const center =
+                0.2126 *
+                    pixels[centerIndex] +
+                0.7152 *
+                    pixels[centerIndex + 1] +
+                0.0722 *
+                    pixels[centerIndex + 2];
+
+            const left =
+                0.2126 *
+                    pixels[leftIndex] +
+                0.7152 *
+                    pixels[leftIndex + 1] +
+                0.0722 *
+                    pixels[leftIndex + 2];
+
+            const right =
+                0.2126 *
+                    pixels[rightIndex] +
+                0.7152 *
+                    pixels[rightIndex + 1] +
+                0.0722 *
+                    pixels[rightIndex + 2];
+
+            const top =
+                0.2126 *
+                    pixels[topIndex] +
+                0.7152 *
+                    pixels[topIndex + 1] +
+                0.0722 *
+                    pixels[topIndex + 2];
+
+            const bottom =
+                0.2126 *
+                    pixels[bottomIndex] +
+                0.7152 *
+                    pixels[bottomIndex + 1] +
+                0.0722 *
+                    pixels[bottomIndex + 2];
+
+            const gx =
+                right - left;
+
+            const gy =
+                bottom - top;
+
+            const edge =
+                Math.sqrt(
+                    gx * gx +
+                    gy * gy
+                );
+
+            edgeStrength += edge;
+            edgeSamples++;
+
+            const localMean =
+                (
+                    left +
+                    right +
+                    top +
+                    bottom
+                ) / 4;
+
+            const noise =
+                Math.abs(
+                    center -
+                    localMean
+                );
+
+            noiseTotal += noise;
+            noiseSamples++;
+        }
+    }
+
+    /* -----------------------------------------
+       Blockiness
+       ----------------------------------------- */
+
+    const blockSize = 8;
+
+    for (
+        let y = blockSize;
+        y < height;
+        y += blockSize
+    ) {
+
+        for (
+            let x = 0;
+            x < width;
+            x++
+        ) {
+
+            const a =
+                ((y - 1) * width + x) * 4;
+
+            const b =
+                (y * width + x) * 4;
+
+            const lumA =
+                0.2126 * pixels[a] +
+                0.7152 * pixels[a + 1] +
+                0.0722 * pixels[a + 2];
+
+            const lumB =
+                0.2126 * pixels[b] +
+                0.7152 * pixels[b + 1] +
+                0.0722 * pixels[b + 2];
+
+            blockDifference +=
+                Math.abs(
+                    lumA - lumB
+                );
+
+            blockSamples++;
+        }
+    }
+
+    for (
+        let x = blockSize;
+        x < width;
+        x += blockSize
+    ) {
+
+        for (
+            let y = 0;
+            y < height;
+            y++
+        ) {
+
+            const a =
+                (y * width + x - 1) * 4;
+
+            const b =
+                (y * width + x) * 4;
+
+            const lumA =
+                0.2126 * pixels[a] +
+                0.7152 * pixels[a + 1] +
+                0.0722 * pixels[a + 2];
+
+            const lumB =
+                0.2126 * pixels[b] +
+                0.7152 * pixels[b + 1] +
+                0.0722 * pixels[b + 2];
+
+            blockDifference +=
+                Math.abs(
+                    lumA - lumB
+                );
+
+            blockSamples++;
+        }
+    }
+
+    const averageEdge =
+        edgeSamples
+            ? edgeStrength /
+              edgeSamples
             : 0;
 
     const noiseLevel =
-        noiseCount
-            ? noiseSum / noiseCount
+        noiseSamples
+            ? noiseTotal /
+              noiseSamples
             : 0;
 
-    /*
-     * Histogram range.
-     */
+    const blockiness =
+        blockSamples
+            ? blockDifference /
+              blockSamples
+            : 0;
+
+    /* -----------------------------------------
+       Histogram range
+       ----------------------------------------- */
 
     let firstBin = 0;
     let lastBin = 255;
@@ -1185,13 +1212,12 @@ function calculateImageMetrics(
     const histogramRange =
         Math.max(
             0,
-            lastBin -
-            firstBin
+            lastBin - firstBin
         );
 
-    /*
-     * Entropy.
-     */
+    /* -----------------------------------------
+       Entropy
+       ----------------------------------------- */
 
     let entropy = 0;
 
@@ -1203,387 +1229,51 @@ function calculateImageMetrics(
             continue;
         }
 
-        const probability =
+        const p =
             count / pixelCount;
 
         entropy -=
-            probability *
-            Math.log2(
-                probability
-            );
+            p * Math.log2(p);
     }
 
-    /*
-     * Channel deviation.
-     */
+    /* -----------------------------------------
+       Channel deviation
+       ----------------------------------------- */
 
     const channelDeviation =
         (
-            Math.abs(
-                redMean -
-                greenMean
-            ) +
-
-            Math.abs(
-                greenMean -
-                blueMean
-            ) +
-
-            Math.abs(
-                redMean -
-                blueMean
-            )
+            Math.abs(meanR - meanG) +
+            Math.abs(meanG - meanB) +
+            Math.abs(meanR - meanB)
         ) / 3;
-
-    /*
-     * Blockiness.
-     */
-
-    const blockiness =
-        calculateBlockiness(
-            pixels,
-            width,
-            height
-        );
 
     return {
 
-        redMean,
+        width,
+        height,
 
-        greenMean,
+        meanR,
+        meanG,
+        meanB,
 
-        blueMean,
+        meanLuma,
+        lumaStd,
 
-        luminanceMean,
-
-        luminanceStd,
-
-        saturationMean,
-
-        edgeStrength,
-
-        noiseLevel,
+        saturation,
 
         entropy,
 
+        edgeStrength:
+            averageEdge,
+
+        noiseLevel,
+
+        blockiness,
+
         histogramRange,
 
-        channelDeviation,
-
-        blockiness
-
+        channelDeviation
     };
-}
-
-/* =========================================================
-   PIXEL LUMINANCE
-   ========================================================= */
-
-function getPixelLuminance(
-    pixels,
-    width,
-    x,
-    y
-) {
-
-    const index =
-        (
-            y *
-            width +
-            x
-        ) * 4;
-
-    const r =
-        pixels[index];
-
-    const g =
-        pixels[index + 1];
-
-    const b =
-        pixels[index + 2];
-
-    return (
-        0.2126 * r +
-        0.7152 * g +
-        0.0722 * b
-    );
-}
-
-/* =========================================================
-   BLOCKINESS
-   ========================================================= */
-
-function calculateBlockiness(
-    pixels,
-    width,
-    height
-) {
-
-    let boundarySum = 0;
-    let internalSum = 0;
-
-    let boundaryCount = 0;
-    let internalCount = 0;
-
-    for (
-        let y = 1;
-        y < height;
-        y++
-    ) {
-
-        for (
-            let x = 1;
-            x < width;
-            x++
-        ) {
-
-            const current =
-                getPixelLuminance(
-                    pixels,
-                    width,
-                    x,
-                    y
-                );
-
-            const left =
-                getPixelLuminance(
-                    pixels,
-                    width,
-                    x - 1,
-                    y
-                );
-
-            const difference =
-                Math.abs(
-                    current -
-                    left
-                );
-
-            if (
-                x % 8 === 0
-            ) {
-
-                boundarySum +=
-                    difference;
-
-                boundaryCount++;
-
-            } else {
-
-                internalSum +=
-                    difference;
-
-                internalCount++;
-            }
-        }
-    }
-
-    const boundaryAverage =
-        boundaryCount
-            ? boundarySum /
-              boundaryCount
-            : 0;
-
-    const internalAverage =
-        internalCount
-            ? internalSum /
-              internalCount
-            : 0;
-
-    if (
-        internalAverage === 0
-    ) {
-        return 0;
-    }
-
-    return (
-        boundaryAverage /
-        internalAverage
-    );
-}
-
-/* =========================================================
-   FORENSIC INDICATORS
-   ========================================================= */
-
-function calculateForensicIndicators(
-    file,
-    width,
-    height,
-    metrics
-) {
-
-    const aspectRatio =
-        width / height;
-
-    const indicators = [];
-
-    /*
-     * File structure
-     */
-
-    indicators.push({
-        name: "File Structure",
-        status: "Normal",
-        detail:
-            "File successfully decoded by the browser."
-    });
-
-    /*
-     * Resolution
-     */
-
-    indicators.push({
-        name: "Resolution",
-        status:
-            width >= 256 &&
-            height >= 256
-                ? "Valid"
-                : "Low",
-
-        detail:
-            `${width} × ${height}`
-    });
-
-    /*
-     * Aspect ratio
-     */
-
-    indicators.push({
-        name: "Aspect Ratio",
-
-        status:
-            aspectRatio >= 0.5 &&
-            aspectRatio <= 2
-                ? "Normal"
-                : "Unusual",
-
-        detail:
-            aspectRatio.toFixed(3)
-    });
-
-    /*
-     * Edge detail
-     */
-
-    indicators.push({
-        name: "Edge Detail",
-
-        status:
-            metrics.edgeStrength >= 12
-                ? "Strong"
-                : metrics.edgeStrength >= 5
-                    ? "Moderate"
-                    : "Low",
-
-        detail:
-            metrics.edgeStrength.toFixed(3)
-    });
-
-    /*
-     * Noise
-     */
-
-    indicators.push({
-        name: "Noise Profile",
-
-        status:
-            metrics.noiseLevel >= 8
-                ? "High"
-                : metrics.noiseLevel >= 3
-                    ? "Moderate"
-                    : "Low",
-
-        detail:
-            metrics.noiseLevel.toFixed(3)
-    });
-
-    /*
-     * Entropy
-     */
-
-    indicators.push({
-        name: "Image Entropy",
-
-        status:
-            metrics.entropy >= 6
-                ? "High Complexity"
-                : metrics.entropy >= 4
-                    ? "Moderate Complexity"
-                    : "Low Complexity",
-
-        detail:
-            metrics.entropy.toFixed(3)
-    });
-
-    /*
-     * Compression
-     */
-
-    indicators.push({
-        name: "Compression Pattern",
-
-        status:
-            metrics.blockiness >= 1.8
-                ? "High"
-                : metrics.blockiness >= 1.2
-                    ? "Moderate"
-                    : "Low",
-
-        detail:
-            metrics.blockiness.toFixed(2)
-    });
-
-    /*
-     * Color distribution
-     */
-
-    indicators.push({
-        name: "Color Distribution",
-
-        status:
-            metrics.channelDeviation > 35
-                ? "Strong Channel Bias"
-                : metrics.channelDeviation > 15
-                    ? "Moderate Channel Bias"
-                    : "Balanced",
-
-        detail:
-            metrics.channelDeviation.toFixed(2)
-    });
-
-    /*
-     * Histogram
-     */
-
-    indicators.push({
-        name: "Histogram Spread",
-
-        status:
-            metrics.histogramRange >= 180
-                ? "Wide"
-                : metrics.histogramRange >= 100
-                    ? "Moderate"
-                    : "Narrow",
-
-        detail:
-            `${metrics.histogramRange} / 255`
-    });
-
-    /*
-     * Extension
-     */
-
-    indicators.push({
-        name: "File Extension",
-
-        status: "Supported",
-
-        detail:
-            file.name
-    });
-
-    return indicators;
 }
 
 /* =========================================================
@@ -1591,45 +1281,86 @@ function calculateForensicIndicators(
    ========================================================= */
 
 function calculateForensicScore(
-    indicators
+    metrics,
+    file
 ) {
 
     let score = 0;
 
-    for (
-        const indicator of indicators
+    /* Extremely low detail */
+    if (
+        metrics.edgeStrength < 2
     ) {
-
-        const status =
-            String(
-                indicator.status
-            ).toLowerCase();
-
-        if (
-            status.includes("high") ||
-            status.includes("unusual")
-        ) {
-
-            score += 2;
-
-        } else if (
-            status.includes("moderate")
-        ) {
-
-            score += 1;
-
-        }
+        score += 8;
     }
 
-    /*
-     * Keep the score within 0-100.
-     */
+    /* Very low noise */
+    if (
+        metrics.noiseLevel < 1.5
+    ) {
+        score += 10;
+    }
+
+    /* Very low entropy */
+    if (
+        metrics.entropy < 5.0
+    ) {
+        score += 10;
+    }
+
+    /* Heavy block artifacts */
+    if (
+        metrics.blockiness > 8
+    ) {
+        score += 12;
+    }
+
+    /* Suspicious histogram compression */
+    if (
+        metrics.histogramRange < 120
+    ) {
+        score += 10;
+    }
+
+    /* Strong channel imbalance */
+    if (
+        metrics.channelDeviation > 55
+    ) {
+        score += 8;
+    }
+
+    /* Very unusual saturation */
+    if (
+        metrics.saturation > 90
+    ) {
+        score += 5;
+    }
+
+    /* Very small resolution */
+    if (
+        metrics.width < 256 ||
+        metrics.height < 256
+    ) {
+        score += 6;
+    }
+
+    /* Supported modern image formats */
+    const extension =
+        file.name
+            .split(".")
+            .pop()
+            ?.toLowerCase();
+
+    if (
+        ["jpg", "jpeg", "png", "webp"]
+            .includes(extension)
+    ) {
+        score += 0;
+    }
 
     return Math.min(
         100,
-        Math.round(
-            score * 7
-        )
+        Math.round(score)
     );
 }
 
@@ -1651,560 +1382,311 @@ function getRiskLevel(score) {
 }
 
 /* =========================================================
-   DISPLAY RESULTS
+   AI RESULT DISPLAY
    ========================================================= */
 
-function displayResults(
-    file,
-    forensic,
-    ai
+function displayAIResult(
+    result
 ) {
 
-    hideLoadingState();
+    const confidence =
+        $("#aiConfidence");
 
-    /*
-     * AI Confidence
-     */
+    const classification =
+        $("#aiClassification");
 
-    if (
-        ai &&
-        ai.available &&
-        typeof ai.confidence === "number"
-    ) {
+    const status =
+        $("#aiStatus");
 
-        setText(
-            "#aiConfidence",
-            `${ai.confidence}%`
-        );
+    const modelName =
+        $("#aiModelName");
 
-        setText(
-            "#aiStatus",
-            ai.message
-        );
+    if (modelName) {
 
-        setText(
-            "#aiModelName",
-            "Deep-Fake-Detector-v2"
-        );
-
-        setText(
-            "#aiClassification",
-            ai.label
-        );
-
-    } else {
-
-        setText(
-            "#aiConfidence",
-            "—"
-        );
-
-        setText(
-            "#aiStatus",
-            ai?.message ||
-            "AI model unavailable."
-        );
-
-        setText(
-            "#aiModelName",
-            "Deep-Fake-Detector-v2"
-        );
-
-        setText(
-            "#aiClassification",
-            "Unavailable"
-        );
+        modelName.textContent =
+            CONFIG.modelId;
     }
 
-    /*
-     * Forensic score
-     */
+    if (!result.available) {
 
-    setText(
-        "#score",
-        `${forensic.score}%`
-    );
+        if (confidence) {
+            confidence.textContent = "—";
+        }
 
-    setText(
-        "#riskLevel",
-        forensic.risk
-    );
+        if (classification) {
+            classification.textContent =
+                result.label ||
+                "AI unavailable";
+        }
 
-    /*
-     * Overall assessment
-     */
+        if (status) {
+            status.textContent =
+                "AI model unavailable";
+        }
+
+        return;
+    }
+
+    if (confidence) {
+
+        confidence.textContent =
+            `${result.confidence}%`;
+    }
+
+    if (classification) {
+
+        classification.textContent =
+            result.label;
+    }
+
+    if (status) {
+
+        status.textContent =
+            "Real AI inference completed";
+    }
+}
+
+/* =========================================================
+   FORENSIC RESULT DISPLAY
+   ========================================================= */
+
+function displayForensicResult(
+    score,
+    metrics,
+    file
+) {
+
+    const scoreElement =
+        $("#score");
+
+    const riskElement =
+        $("#riskLevel");
+
+    if (scoreElement) {
+
+        scoreElement.textContent =
+            `${score}%`;
+    }
+
+    const risk =
+        getRiskLevel(score);
+
+    if (riskElement) {
+
+        riskElement.textContent =
+            risk;
+    }
 
     const assessment =
-        createOverallAssessment(
-            forensic,
-            ai
-        );
+        $("#overallAssessment");
 
-    setText(
-        "#overallAssessment",
-        assessment
-    );
+    if (assessment) {
 
-    /*
-     * Individual indicators
-     */
+        if (score >= 60) {
 
-    updateIndicatorElements(
-        forensic.indicators
-    );
+            assessment.textContent =
+                "Significant forensic anomalies detected. Further expert verification is recommended.";
 
-    /*
-     * Detailed report
-     */
+        } else if (score >= 30) {
 
-    renderForensicDetails(
-        file,
-        forensic,
-        ai
-    );
+            assessment.textContent =
+                "Some forensic anomalies were detected. The media should be reviewed carefully.";
 
-    /*
-     * Show results
-     */
+        } else {
 
-    if (resultSection) {
-
-        resultSection.style.display =
-            "block";
-
-        resultSection.scrollIntoView({
-            behavior: "smooth",
-            block: "start"
-        });
+            assessment.textContent =
+                "No strong forensic anomalies were detected by the browser-based forensic engine.";
+        }
     }
+
+    updateIndicator(
+        "#indicatorFileStructure",
+        "File Structure",
+        "Normal"
+    );
+
+    updateIndicator(
+        "#indicatorResolution",
+        "Media Resolution",
+        `${metrics.width} × ${metrics.height}`
+    );
+
+    updateIndicator(
+        "#indicatorAspect",
+        "Aspect Ratio",
+        `${(
+            metrics.width /
+            metrics.height
+        ).toFixed(2)}`
+    );
+
+    updateIndicator(
+        "#indicatorEdges",
+        "Edge Detail",
+        metrics.edgeStrength.toFixed(3)
+    );
+
+    updateIndicator(
+        "#indicatorNoise",
+        "Noise Profile",
+        metrics.noiseLevel.toFixed(3)
+    );
+
+    updateIndicator(
+        "#indicatorEntropy",
+        "Image Entropy",
+        metrics.entropy.toFixed(3)
+    );
+
+    updateIndicator(
+        "#indicatorCompression",
+        "Compression Pattern",
+        metrics.blockiness.toFixed(2)
+    );
+
+    updateIndicator(
+        "#indicatorColor",
+        "Color Distribution",
+        metrics.channelDeviation.toFixed(2)
+    );
+
+    updateIndicator(
+        "#indicatorHistogram",
+        "Histogram Spread",
+        `${metrics.histogramRange} / 255`
+    );
+
+    const extension =
+        file.name
+            .split(".")
+            .pop()
+            ?.toUpperCase();
+
+    updateIndicator(
+        "#indicatorExtension",
+        "File Extension",
+        extension || "UNKNOWN"
+    );
+
+    displayForensicDetails(
+        metrics,
+        file
+    );
 }
 
 /* =========================================================
-   OVERALL ASSESSMENT
+   INDICATOR HELPER
    ========================================================= */
 
-function createOverallAssessment(
-    forensic,
-    ai
+function updateIndicator(
+    selector,
+    label,
+    value
 ) {
 
-    if (
-        ai &&
-        ai.available &&
-        ai.label === "Deepfake"
-    ) {
+    const element =
+        $(selector);
 
-        return (
-            `AI model classified this media as Deepfake ` +
-            `with ${ai.confidence}% confidence. ` +
-            `Forensic anomaly score: ${forensic.score}%.`
-        );
+    if (!element) {
+        return;
     }
 
-    if (
-        ai &&
-        ai.available &&
-        ai.label === "Realism"
-    ) {
-
-        return (
-            `AI model classified this media as Realism ` +
-            `with ${ai.confidence}% confidence. ` +
-            `Forensic anomaly score: ${forensic.score}%.`
-        );
-    }
-
-    return (
-        `AI classification is unavailable. ` +
-        `Current forensic anomaly score: ${forensic.score}%. ` +
-        `This score is heuristic and is not a definitive deepfake verdict.`
-    );
-}
-
-/* =========================================================
-   UPDATE INDICATORS
-   ========================================================= */
-
-function updateIndicatorElements(
-    indicators
-) {
-
-    const mapping = {
-
-        "File Structure":
-            "#indicatorFileStructure",
-
-        "Resolution":
-            "#indicatorResolution",
-
-        "Aspect Ratio":
-            "#indicatorAspect",
-
-        "Edge Detail":
-            "#indicatorEdges",
-
-        "Noise Profile":
-            "#indicatorNoise",
-
-        "Image Entropy":
-            "#indicatorEntropy",
-
-        "Compression Pattern":
-            "#indicatorCompression",
-
-        "Color Distribution":
-            "#indicatorColor",
-
-        "Histogram Spread":
-            "#indicatorHistogram",
-
-        "File Extension":
-            "#indicatorExtension"
-    };
-
-    for (
-        const indicator of indicators
-    ) {
-
-        const selector =
-            mapping[
-                indicator.name
-            ];
-
-        if (!selector) {
-            continue;
-        }
-
-        const element =
-            $(selector);
-
-        if (!element) {
-            continue;
-        }
-
-        element.textContent =
-            `${indicator.status}`;
-    }
+    element.textContent =
+        `${label}: ${value}`;
 }
 
 /* =========================================================
    FORENSIC DETAILS
    ========================================================= */
 
-function renderForensicDetails(
-    file,
-    forensic,
-    ai
+function displayForensicDetails(
+    metrics,
+    file
 ) {
 
-    if (!analysisDetails) {
+    const details =
+        $("#forensicDetails") ||
+        $("#analysisDetails");
+
+    if (!details) {
         return;
     }
 
-    const metrics =
-        forensic.metrics || {};
+    const type =
+        file.type.startsWith("image/")
+            ? "image"
+            : file.type.startsWith("video/")
+                ? "video"
+                : "media";
 
-    const aiText =
-        ai &&
-        ai.available
-            ? `${ai.label} (${ai.confidence}%)`
-            : "Unavailable";
-
-    analysisDetails.innerHTML = `
-        <div class="forensic-report">
-
-            <p>
-                <strong>File:</strong>
-                ${escapeHTML(file.name)}
-            </p>
-
-            <p>
-                <strong>Type:</strong>
-                ${escapeHTML(file.type || "Unknown")}
-            </p>
-
-            <p>
-                <strong>Size:</strong>
-                ${formatBytes(file.size)}
-            </p>
-
-            ${
-                forensic.width
-                    ? `
-                        <p>
-                            <strong>Resolution:</strong>
-                            ${forensic.width} × ${forensic.height}
-                        </p>
-                    `
-                    : ""
-            }
-
-            <p>
-                <strong>AI Classification:</strong>
-                ${escapeHTML(aiText)}
-            </p>
-
-            <p>
-                <strong>AI Model:</strong>
-                Deep-Fake-Detector-v2
-            </p>
-
-            ${
-                typeof metrics.luminanceMean === "number"
-                    ? `
-                        <hr>
-
-                        <p>
-                            <strong>Luminance Mean:</strong>
-                            ${metrics.luminanceMean.toFixed(2)}
-                        </p>
-
-                        <p>
-                            <strong>Luminance Std:</strong>
-                            ${metrics.luminanceStd.toFixed(2)}
-                        </p>
-
-                        <p>
-                            <strong>Saturation:</strong>
-                            ${(metrics.saturationMean * 100).toFixed(2)}%
-                        </p>
-
-                        <p>
-                            <strong>Entropy:</strong>
-                            ${metrics.entropy.toFixed(3)}
-                        </p>
-
-                        <p>
-                            <strong>Edge Strength:</strong>
-                            ${metrics.edgeStrength.toFixed(3)}
-                        </p>
-
-                        <p>
-                            <strong>Noise Level:</strong>
-                            ${metrics.noiseLevel.toFixed(3)}
-                        </p>
-
-                        <p>
-                            <strong>Blockiness:</strong>
-                            ${metrics.blockiness.toFixed(2)}
-                        </p>
-
-                        <p>
-                            <strong>Histogram Range:</strong>
-                            ${metrics.histogramRange}
-                        </p>
-                    `
-                    : ""
-            }
-
+    details.innerHTML = `
+        <div class="forensic-line">
+            <strong>File:</strong>
+            ${escapeHTML(file.name)}
         </div>
 
-        <p class="forensic-disclaimer">
-            ⚠ AI prediction is generated by a trained
-            deepfake classification model. Forensic
-            indicators are heuristic signals and should
-            not be treated as definitive proof.
-        </p>
+        <div class="forensic-line">
+            <strong>Type:</strong>
+            ${type}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Size:</strong>
+            ${formatBytes(file.size)}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Resolution:</strong>
+            ${metrics.width} × ${metrics.height}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Engine:</strong>
+            DeepShield Visual Forensics v0.5
+        </div>
+
+        <hr>
+
+        <div class="forensic-line">
+            <strong>Luminance Mean:</strong>
+            ${metrics.meanLuma.toFixed(2)}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Luminance Std:</strong>
+            ${metrics.lumaStd.toFixed(2)}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Saturation:</strong>
+            ${metrics.saturation.toFixed(2)}%
+        </div>
+
+        <div class="forensic-line">
+            <strong>Entropy:</strong>
+            ${metrics.entropy.toFixed(3)}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Edge Strength:</strong>
+            ${metrics.edgeStrength.toFixed(3)}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Noise Level:</strong>
+            ${metrics.noiseLevel.toFixed(3)}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Blockiness:</strong>
+            ${metrics.blockiness.toFixed(2)}
+        </div>
+
+        <div class="forensic-line">
+            <strong>Histogram Range:</strong>
+            ${metrics.histogramRange}
+        </div>
     `;
-}
-
-/* =========================================================
-   LOADING STATE
-   ========================================================= */
-
-function showLoadingState() {
-
-    if (analyzeButton) {
-
-        analyzeButton.disabled =
-            true;
-
-        analyzeButton.dataset.originalText =
-            analyzeButton.textContent;
-
-        analyzeButton.textContent =
-            "Analyzing...";
-    }
-
-    setAIStatus(
-        aiModelReady
-            ? "Running AI detection..."
-            : "Preparing AI model..."
-    );
-}
-
-function hideLoadingState() {
-
-    if (analyzeButton) {
-
-        analyzeButton.disabled =
-            false;
-
-        analyzeButton.textContent =
-            analyzeButton.dataset.originalText ||
-            "Analyze";
-    }
-}
-
-/* =========================================================
-   AI STATUS
-   ========================================================= */
-
-function setAIStatus(message) {
-
-    setText(
-        "#aiStatus",
-        message
-    );
-}
-
-/* =========================================================
-   UI RESET
-   ========================================================= */
-
-function resetUI() {
-
-    if (analyzeButton) {
-        analyzeButton.disabled = true;
-    }
-
-    setText(
-        "#aiConfidence",
-        "—"
-    );
-
-    setText(
-        "#aiStatus",
-        "Preparing AI model..."
-    );
-
-    setText(
-        "#aiModelName",
-        "Deep-Fake-Detector-v2"
-    );
-
-    setText(
-        "#aiClassification",
-        "Waiting for analysis"
-    );
-
-    setText(
-        "#score",
-        "—"
-    );
-
-    setText(
-        "#riskLevel",
-        "WAITING"
-    );
-
-    setText(
-        "#overallAssessment",
-        "Upload an image to begin analysis."
-    );
-
-    if (resultSection) {
-        resultSection.style.display = "none";
-    }
-}
-
-/* =========================================================
-   MESSAGE
-   ========================================================= */
-
-function showMessage(message) {
-
-    console.warn(
-        "DeepShield:",
-        message
-    );
-
-    const messageElement =
-        $("#message") ||
-        $("#statusMessage") ||
-        $("#uploadMessage");
-
-    if (messageElement) {
-
-        messageElement.textContent =
-            message;
-
-        messageElement.style.display =
-            "block";
-    }
-}
-
-function clearMessage() {
-
-    const messageElement =
-        $("#message") ||
-        $("#statusMessage") ||
-        $("#uploadMessage");
-
-    if (messageElement) {
-
-        messageElement.textContent =
-            "";
-
-        messageElement.style.display =
-            "none";
-    }
-}
-
-/* =========================================================
-   FORMATTING
-   ========================================================= */
-
-function formatBytes(bytes) {
-
-    if (!Number.isFinite(bytes)) {
-        return "Unknown";
-    }
-
-    if (bytes === 0) {
-        return "0 Bytes";
-    }
-
-    const units = [
-        "Bytes",
-        "KB",
-        "MB",
-        "GB"
-    ];
-
-    const index =
-        Math.floor(
-            Math.log(bytes) /
-            Math.log(1024)
-        );
-
-    return (
-        parseFloat(
-            (
-                bytes /
-                Math.pow(
-                    1024,
-                    index
-                )
-            ).toFixed(2)
-        ) +
-        " " +
-        units[index]
-    );
-}
-
-function getFileExtension(
-    filename
-) {
-
-    if (!filename.includes(".")) {
-        return "";
-    }
-
-    return filename
-        .split(".")
-        .pop()
-        .toLowerCase();
 }
 
 /* =========================================================
@@ -2214,55 +1696,388 @@ function getFileExtension(
 function escapeHTML(value) {
 
     return String(value)
-        .replace(
-            /&/g,
-            "&amp;"
-        )
-        .replace(
-            /</g,
-            "&lt;"
-        )
-        .replace(
-            />/g,
-            "&gt;"
-        )
-        .replace(
-            /"/g,
-            "&quot;"
-        )
-        .replace(
-            /'/g,
-            "&#039;"
-        );
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
 /* =========================================================
-   GLOBAL DEBUG API
+   ANALYZE FILE
+   ========================================================= */
+
+async function analyzeFile(file) {
+
+    if (!file) {
+        return;
+    }
+
+    const resultSection =
+        firstExisting([
+            "#results",
+            "#result",
+            "#analysisResult",
+            ".results",
+            ".result-section"
+        ]);
+
+    if (resultSection) {
+
+        resultSection.classList.add(
+            "analysis-loading"
+        );
+    }
+
+    setStatus(
+        "DeepShield is analyzing the media...",
+        "processing"
+    );
+
+    try {
+
+        /* =====================================
+           IMAGE ANALYSIS
+           ===================================== */
+
+        if (
+            file.type.startsWith("image/")
+        ) {
+
+            const image =
+                await loadImage(file);
+
+            const metrics =
+                calculateForensicMetrics(
+                    image
+                );
+
+            const forensicScore =
+                calculateForensicScore(
+                    metrics,
+                    file
+                );
+
+            /* AI */
+            const aiResult =
+                await runAIAnalysis(file);
+
+            displayAIResult(
+                aiResult
+            );
+
+            displayForensicResult(
+                forensicScore,
+                metrics,
+                file
+            );
+
+            setStatus(
+                "Analysis completed successfully.",
+                "success"
+            );
+
+        }
+
+        /* =====================================
+           VIDEO ANALYSIS
+           ===================================== */
+
+        else if (
+            file.type.startsWith("video/")
+        ) {
+
+            displayVideoResult(
+                file
+            );
+
+            setStatus(
+                "Video metadata analysis completed. Frame-level AI analysis is not yet enabled.",
+                "success"
+            );
+        }
+
+        else {
+
+            throw new Error(
+                "Unsupported media type."
+            );
+        }
+
+    } catch (error) {
+
+        console.error(
+            "DeepShield analysis error:",
+            error
+        );
+
+        setStatus(
+            "Analysis failed. Check the browser console for details.",
+            "error"
+        );
+
+        alert(
+            "حدث خطأ أثناء التحليل.\n\n" +
+            error.message
+        );
+
+    } finally {
+
+        if (resultSection) {
+
+            resultSection.classList.remove(
+                "analysis-loading"
+            );
+        }
+    }
+}
+
+/* =========================================================
+   VIDEO RESULT
+   ========================================================= */
+
+function displayVideoResult(
+    file
+) {
+
+    const score =
+        $("#score");
+
+    const risk =
+        $("#riskLevel");
+
+    const confidence =
+        $("#aiConfidence");
+
+    const classification =
+        $("#aiClassification");
+
+    if (confidence) {
+        confidence.textContent = "—";
+    }
+
+    if (classification) {
+
+        classification.textContent =
+            "Video frame AI analysis pending";
+    }
+
+    if (score) {
+        score.textContent = "—";
+    }
+
+    if (risk) {
+
+        risk.textContent =
+            "VIDEO METADATA";
+    }
+
+    const details =
+        $("#forensicDetails") ||
+        $("#analysisDetails");
+
+    if (details) {
+
+        details.innerHTML = `
+            <div class="forensic-line">
+                <strong>File:</strong>
+                ${escapeHTML(file.name)}
+            </div>
+
+            <div class="forensic-line">
+                <strong>Type:</strong>
+                Video
+            </div>
+
+            <div class="forensic-line">
+                <strong>Size:</strong>
+                ${formatBytes(file.size)}
+            </div>
+
+            <div class="forensic-line">
+                <strong>Engine:</strong>
+                DeepShield Media Forensics v0.5
+            </div>
+
+            <hr>
+
+            <div class="forensic-line">
+                Video frame extraction and frame-by-frame AI
+                detection will be added in the next engine version.
+            </div>
+        `;
+    }
+}
+
+/* =========================================================
+   ANALYZE BUTTON
+   ========================================================= */
+
+function setupAnalyzeButton() {
+
+    const button =
+        getAnalyzeButton();
+
+    if (!button) {
+        return;
+    }
+
+    button.addEventListener(
+        "click",
+        async event => {
+
+            event.preventDefault();
+
+            if (!selectedFile) {
+
+                const input =
+                    getFileInput();
+
+                if (input) {
+                    input.click();
+                }
+
+                return;
+            }
+
+            await analyzeFile(
+                selectedFile
+            );
+        }
+    );
+}
+
+/* =========================================================
+   PRELOAD AI
+   ========================================================= */
+
+function setupAIModel() {
+
+    const preload =
+        firstExisting([
+            "#loadAI",
+            "#loadModel",
+            "#preloadAI"
+        ]);
+
+    if (preload) {
+
+        preload.addEventListener(
+            "click",
+            async () => {
+
+                await loadAIModel();
+
+            }
+        );
+    }
+}
+
+/* =========================================================
+   INITIALIZATION
+   ========================================================= */
+
+async function initDeepShield() {
+
+    console.log(
+        "===================================="
+    );
+
+    console.log(
+        "DeepShield AI v0.5"
+    );
+
+    console.log(
+        "Initializing..."
+    );
+
+    console.log(
+        "===================================="
+    );
+
+    setupGlobalDragProtection();
+
+    setupFileInput();
+
+    setupDragAndDrop();
+
+    setupAnalyzeButton();
+
+    setupAIModel();
+
+    /* Disable analyze until a file exists */
+
+    const button =
+        getAnalyzeButton();
+
+    if (button) {
+        button.disabled = true;
+    }
+
+    /* Update model name */
+
+    const modelName =
+        $("#aiModelName");
+
+    if (modelName) {
+
+        modelName.textContent =
+            CONFIG.modelId;
+    }
+
+    updateAIStatus(
+        "AI model will load when needed."
+    );
+
+    console.log(
+        "DeepShield initialization complete."
+    );
+}
+
+/* =========================================================
+   START APPLICATION
+   ========================================================= */
+
+if (
+    document.readyState ===
+    "loading"
+) {
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        initDeepShield
+    );
+
+} else {
+
+    initDeepShield();
+}
+
+/* =========================================================
+   DEBUG API
    ========================================================= */
 
 window.DeepShield = {
 
-    getAIStatus: () => ({
-        model:
-            CONFIG.modelId,
+    version: "0.5",
 
-        loading:
-            aiModelLoading,
+    config: CONFIG,
 
-        ready:
-            aiModelReady
-    }),
+    getSelectedFile() {
+        return selectedFile;
+    },
 
-    getSelectedFile: () =>
-        selectedFile,
+    loadModel:
+        loadAIModel,
 
-    getForensicResult: () =>
-        forensicResult,
+    analyze:
+        analyzeFile,
 
-    getAIResult: () =>
-        aiResult
+    getModel() {
+        return aiClassifier;
+    }
 };
 
 console.log(
-    "DeepShield AI v0.4 initialized."
+    "DeepShield API available as window.DeepShield"
 );
