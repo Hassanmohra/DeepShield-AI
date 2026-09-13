@@ -6,37 +6,26 @@
 
     <title>DeepShield AI | Deepfake Detection</title>
 
-    <meta name="description"
-          content="DeepShield AI - AI-powered deepfake detection and digital media forensics platform.">
+    <meta
+        name="description"
+        content="DeepShield AI - AI-powered deepfake detection and digital media forensics platform."
+    >
 
     <style>
         * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg: #07111f;
-            --bg-secondary: #0b1728;
-            --card: rgba(14, 29, 48, 0.82);
-            --border: rgba(96, 165, 250, 0.16);
-            --text: #f5f9ff;
-            --muted: #91a4ba;
-            --primary: #38bdf8;
-            --secondary: #6366f1;
-            --success: #22c55e;
-            --danger: #ef4444;
         }
 
         body {
             min-height: 100vh;
-            font-family: Arial, Helvetica, sans-serif;
-            color: var(--text);
+            font-family: Inter, Arial, Helvetica, sans-serif;
             background:
-                radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.12), transparent 30%),
-                radial-gradient(circle at 85% 15%, rgba(99, 102, 241, 0.13), transparent 30%),
-                linear-gradient(135deg, #050c16, var(--bg), #09172a);
+                radial-gradient(circle at 15% 20%, rgba(0, 229, 255, 0.10), transparent 30%),
+                radial-gradient(circle at 85% 10%, rgba(99, 102, 241, 0.12), transparent 30%),
+                #050816;
+            color: #e8f0ff;
             overflow-x: hidden;
         }
 
@@ -45,83 +34,83 @@
             position: fixed;
             inset: 0;
             pointer-events: none;
-            opacity: 0.18;
-            background-image:
-                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-            background-size: 45px 45px;
+            background:
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 40px 40px;
+            mask-image: linear-gradient(to bottom, black, transparent);
         }
 
+        .container {
+            width: min(1180px, 92%);
+            margin: auto;
+        }
+
+        /* HEADER */
+
         header {
-            position: relative;
-            z-index: 2;
-            width: 100%;
-            border-bottom: 1px solid var(--border);
-            background: rgba(5, 12, 22, 0.72);
-            backdrop-filter: blur(18px);
+            padding: 26px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            backdrop-filter: blur(15px);
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: rgba(5, 8, 22, 0.72);
         }
 
         .nav {
-            max-width: 1200px;
-            margin: auto;
-            padding: 20px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 20px;
         }
 
-        .logo {
+        .brand {
             display: flex;
             align-items: center;
             gap: 12px;
             font-size: 21px;
             font-weight: 800;
-            letter-spacing: 0.5px;
+            letter-spacing: -0.4px;
         }
 
-        .logo-icon {
+        .brand-icon {
             width: 42px;
             height: 42px;
-            border-radius: 12px;
             display: grid;
             place-items: center;
-            font-size: 21px;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            box-shadow: 0 0 30px rgba(56, 189, 248, 0.25);
+            border-radius: 13px;
+            background: linear-gradient(135deg, #00d9ff, #6366f1);
+            box-shadow: 0 0 30px rgba(0, 217, 255, 0.20);
+            font-size: 22px;
         }
 
         .status {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 13px;
-            border-radius: 30px;
-            border: 1px solid rgba(34, 197, 94, 0.2);
-            background: rgba(34, 197, 94, 0.06);
-            color: #86efac;
+            padding: 9px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(0, 255, 170, 0.20);
+            background: rgba(0, 255, 170, 0.06);
+            color: #72ffc7;
             font-size: 13px;
+            font-weight: 700;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: var(--success);
-            box-shadow: 0 0 12px var(--success);
+            background: #38f5a6;
+            box-shadow: 0 0 12px #38f5a6;
         }
 
-        main {
-            position: relative;
-            z-index: 1;
-            max-width: 1200px;
-            margin: auto;
-            padding: 70px 24px 80px;
-        }
+        /* HERO */
 
         .hero {
+            padding: 85px 0 60px;
             text-align: center;
-            max-width: 850px;
-            margin: 0 auto 55px;
         }
 
         .eyebrow {
@@ -129,325 +118,376 @@
             align-items: center;
             gap: 8px;
             padding: 8px 14px;
-            margin-bottom: 20px;
-            border: 1px solid var(--border);
-            border-radius: 30px;
-            color: var(--primary);
-            background: rgba(56, 189, 248, 0.06);
+            border-radius: 999px;
+            border: 1px solid rgba(0, 217, 255, 0.18);
+            background: rgba(0, 217, 255, 0.05);
+            color: #63e9ff;
             font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
+            font-weight: 800;
+            letter-spacing: 1.3px;
+            margin-bottom: 22px;
         }
 
-        h1 {
+        .hero h1 {
+            max-width: 850px;
+            margin: auto;
             font-size: clamp(42px, 7vw, 76px);
             line-height: 0.98;
             letter-spacing: -3px;
-            margin-bottom: 25px;
-        }
-
-        h1 span {
-            background: linear-gradient(90deg, #ffffff, var(--primary), #818cf8);
+            background: linear-gradient(90deg, #ffffff, #8cecff, #a4a8ff);
             -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
+            -webkit-text-fill-color: transparent;
         }
 
         .hero p {
             max-width: 700px;
-            margin: auto;
-            color: var(--muted);
-            font-size: 18px;
-            line-height: 1.7;
+            margin: 25px auto 0;
+            color: #9caac5;
+            font-size: 17px;
+            line-height: 1.8;
         }
+
+        /* WORKSPACE */
 
         .workspace {
             display: grid;
-            grid-template-columns: 1fr 0.82fr;
+            grid-template-columns: 0.9fr 1.1fr;
             gap: 24px;
-            align-items: stretch;
+            padding-bottom: 70px;
         }
 
         .card {
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(13, 20, 40, 0.70);
+            backdrop-filter: blur(22px);
             border-radius: 24px;
-            background: var(--card);
-            backdrop-filter: blur(20px);
-            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.28);
-        }
-
-        .upload-card {
             padding: 28px;
+            box-shadow: 0 20px 70px rgba(0,0,0,0.25);
         }
 
         .card-title {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 22px;
-        }
-
-        .card-title h2 {
             font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 7px;
         }
 
-        .card-title span {
-            color: var(--muted);
-            font-size: 12px;
+        .card-subtitle {
+            color: #8492ad;
+            font-size: 13px;
+            margin-bottom: 25px;
         }
+
+        /* UPLOAD */
 
         .drop-zone {
-            min-height: 380px;
-            border: 1.5px dashed rgba(56, 189, 248, 0.35);
+            min-height: 320px;
+            border: 1px dashed rgba(0, 217, 255, 0.30);
             border-radius: 20px;
+            background: rgba(0, 217, 255, 0.025);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding: 35px;
             cursor: pointer;
             transition: 0.25s ease;
-            background:
-                radial-gradient(circle at center, rgba(56, 189, 248, 0.07), transparent 60%),
-                rgba(255, 255, 255, 0.015);
+            padding: 30px;
         }
 
         .drop-zone:hover,
-        .drop-zone.dragover {
-            border-color: var(--primary);
-            background:
-                radial-gradient(circle at center, rgba(56, 189, 248, 0.12), transparent 65%),
-                rgba(56, 189, 248, 0.025);
+        .drop-zone.drag-over {
+            border-color: #00d9ff;
+            background: rgba(0, 217, 255, 0.07);
             transform: translateY(-2px);
+            box-shadow: 0 0 35px rgba(0, 217, 255, 0.08);
         }
 
         .upload-icon {
-            width: 78px;
-            height: 78px;
-            margin: 0 auto 20px;
-            border-radius: 22px;
+            width: 75px;
+            height: 75px;
             display: grid;
             place-items: center;
-            font-size: 32px;
-            background: rgba(56, 189, 248, 0.08);
-            border: 1px solid rgba(56, 189, 248, 0.15);
+            border-radius: 22px;
+            background: linear-gradient(
+                135deg,
+                rgba(0,217,255,0.15),
+                rgba(99,102,241,0.15)
+            );
+            border: 1px solid rgba(0,217,255,0.16);
+            font-size: 34px;
+            margin-bottom: 22px;
         }
 
         .drop-zone h3 {
-            font-size: 21px;
-            margin-bottom: 10px;
+            font-size: 19px;
+            margin-bottom: 8px;
         }
 
         .drop-zone p {
-            max-width: 430px;
-            margin: auto;
-            color: var(--muted);
-            font-size: 14px;
-            line-height: 1.6;
+            color: #7887a3;
+            font-size: 13px;
+            margin-bottom: 20px;
         }
 
-        .browse {
-            display: inline-block;
-            margin-top: 22px;
+        .choose-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             padding: 12px 20px;
             border-radius: 12px;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            background: linear-gradient(135deg, #00c9f5, #6366f1);
             color: white;
             font-size: 14px;
-            font-weight: 700;
+            font-weight: 800;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 10px 30px rgba(0, 201, 245, 0.15);
+        }
+
+        .formats {
+            margin-top: 18px;
+            color: #65738d;
+            font-size: 11px;
+            line-height: 1.7;
         }
 
         #fileInput {
             display: none;
         }
 
-        .formats {
-            margin-top: 17px;
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .format {
-            padding: 6px 9px;
-            border-radius: 7px;
-            background: rgba(255,255,255,0.04);
-            color: #9eb0c4;
-            font-size: 11px;
+        #fileSelected {
+            margin-top: 18px;
+            padding: 12px 15px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.035);
             border: 1px solid rgba(255,255,255,0.06);
-        }
-
-        .result-card {
-            padding: 28px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .result-empty {
-            flex: 1;
-            min-height: 380px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            color: var(--muted);
-        }
-
-        .scan-symbol {
-            width: 90px;
-            height: 90px;
-            margin: 0 auto 20px;
-            border-radius: 50%;
-            border: 1px solid rgba(56, 189, 248, 0.2);
-            display: grid;
-            place-items: center;
-            font-size: 35px;
-            background: rgba(56, 189, 248, 0.05);
-        }
-
-        .result-empty h3 {
-            color: var(--text);
-            margin-bottom: 10px;
-            font-size: 19px;
-        }
-
-        .result-empty p {
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        .analysis-result {
+            color: #b8c6df;
+            font-size: 12px;
+            word-break: break-word;
             display: none;
         }
 
-        .score-box {
+        #fileSelected.file-selected {
+            display: block;
+        }
+
+        .scan-btn {
+            width: 100%;
+            margin-top: 18px;
+            padding: 15px;
+            border: none;
+            border-radius: 14px;
+            color: white;
+            background: linear-gradient(135deg, #00bcd9, #5b5fe8);
+            font-weight: 800;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.25s ease;
+        }
+
+        .scan-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 35px rgba(0, 188, 217, 0.16);
+        }
+
+        /* RESULTS */
+
+        .result-empty {
+            min-height: 560px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             text-align: center;
-            padding: 28px 10px;
+            color: #65738d;
+        }
+
+        .result-empty-icon {
+            font-size: 48px;
+            margin-bottom: 18px;
+            opacity: 0.65;
+        }
+
+        .result-empty h3 {
+            color: #aab7cd;
+            margin-bottom: 8px;
+        }
+
+        .result-empty p {
+            max-width: 360px;
+            line-height: 1.7;
+            font-size: 13px;
+        }
+
+        #analysisResult {
+            display: none;
+        }
+
+        .score-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-top: 18px;
+        }
+
+        .metric-card {
+            padding: 20px;
             border-radius: 18px;
             background: rgba(255,255,255,0.025);
-            border: 1px solid rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.07);
         }
 
-        .score {
-            font-size: 58px;
+        .metric-label {
+            color: #8290aa;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 9px;
+        }
+
+        .metric-value {
+            font-size: 31px;
+            font-weight: 900;
+            letter-spacing: -1px;
+        }
+
+        .metric-note {
+            margin-top: 7px;
+            color: #697791;
+            font-size: 11px;
+        }
+
+        .ai-value {
+            color: #8d96ff;
+        }
+
+        .forensic-value {
+            color: #55e4ff;
+        }
+
+        .assessment {
+            margin-top: 14px;
+            padding: 17px 19px;
+            border-radius: 17px;
+            border: 1px solid rgba(255,255,255,0.07);
+            background: rgba(255,255,255,0.025);
+        }
+
+        .assessment-label {
+            color: #7e8ca5;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 7px;
+        }
+
+        #riskLevel {
+            font-size: 19px;
+            font-weight: 900;
+            color: #e8f0ff;
+        }
+
+        .section-title {
+            margin-top: 25px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            color: #b8c5da;
             font-weight: 800;
-            letter-spacing: -3px;
-        }
-
-        .score-label {
-            color: var(--muted);
-            font-size: 12px;
-            margin-top: 4px;
-        }
-
-        .risk {
-            display: inline-block;
-            margin-top: 13px;
-            padding: 7px 13px;
-            border-radius: 20px;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.18);
-            color: #fca5a5;
-            font-size: 12px;
-            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .indicators {
-            margin-top: 20px;
+            display: grid;
+            gap: 9px;
         }
 
         .indicator {
             display: flex;
+            align-items: center;
             justify-content: space-between;
             gap: 15px;
-            padding: 13px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
-            font-size: 13px;
-        }
-
-        .indicator span:last-child {
-            color: #fbbf24;
-            font-weight: 700;
-        }
-
-        .scan-button {
-            width: 100%;
-            border: 0;
-            margin-top: 20px;
-            padding: 15px;
+            padding: 13px 15px;
             border-radius: 13px;
-            color: white;
-            font-size: 14px;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(255,255,255,0.05);
+            font-size: 12px;
+        }
+
+        .indicator-name {
+            color: #9ba9c0;
+        }
+
+        .indicator-status {
+            color: #67e8f9;
             font-weight: 800;
-            cursor: pointer;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            transition: 0.2s ease;
+            text-align: right;
         }
 
-        .scan-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 30px rgba(56, 189, 248, 0.18);
+        #forensicDetails {
+            padding: 15px;
+            border-radius: 14px;
+            background: rgba(0,0,0,0.14);
+            border: 1px solid rgba(255,255,255,0.05);
+            color: #7f8da6;
+            font-size: 11px;
+            line-height: 1.8;
         }
 
-        .scan-button:disabled {
-            opacity: 0.7;
-            cursor: wait;
-            transform: none;
-        }
-
-        .file-selected {
-            display: none;
+        .disclaimer {
             margin-top: 15px;
             padding: 12px 14px;
             border-radius: 12px;
-            background: rgba(34, 197, 94, 0.06);
-            border: 1px solid rgba(34, 197, 94, 0.15);
-            color: #86efac;
-            font-size: 12px;
-            word-break: break-all;
+            background: rgba(255, 193, 7, 0.04);
+            border: 1px solid rgba(255, 193, 7, 0.10);
+            color: #8d8b79;
+            font-size: 10px;
+            line-height: 1.6;
         }
+
+        /* FEATURES */
 
         .features {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-top: 24px;
+            gap: 18px;
+            padding-bottom: 65px;
         }
 
         .feature {
-            padding: 22px;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            background: rgba(255,255,255,0.018);
+            padding: 24px;
+            border-radius: 20px;
+            background: rgba(13,20,40,0.55);
+            border: 1px solid rgba(255,255,255,0.06);
         }
 
         .feature-icon {
-            font-size: 23px;
-            margin-bottom: 12px;
+            font-size: 26px;
+            margin-bottom: 15px;
         }
 
         .feature h3 {
-            font-size: 14px;
-            margin-bottom: 7px;
+            font-size: 16px;
+            margin-bottom: 8px;
         }
 
         .feature p {
-            color: var(--muted);
+            color: #74829b;
             font-size: 12px;
-            line-height: 1.6;
+            line-height: 1.7;
         }
 
+        /* FOOTER */
+
         footer {
-            position: relative;
-            z-index: 1;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding: 25px 0 35px;
             text-align: center;
-            padding: 25px;
-            border-top: 1px solid var(--border);
-            color: #61758d;
-            font-size: 12px;
+            color: #536079;
+            font-size: 11px;
         }
+
+        /* RESPONSIVE */
 
         @media (max-width: 850px) {
             .workspace {
@@ -458,37 +498,31 @@
                 grid-template-columns: 1fr;
             }
 
-            main {
-                padding-top: 45px;
+            .hero {
+                padding-top: 60px;
             }
 
-            h1 {
+            .hero h1 {
                 letter-spacing: -2px;
             }
         }
 
         @media (max-width: 520px) {
             .nav {
-                padding: 15px;
+                align-items: flex-start;
+                flex-direction: column;
             }
 
-            .status {
-                display: none;
+            .score-grid {
+                grid-template-columns: 1fr;
             }
 
-            main {
-                padding-left: 15px;
-                padding-right: 15px;
-            }
-
-            .upload-card,
-            .result-card {
-                padding: 18px;
+            .card {
+                padding: 20px;
             }
 
             .drop-zone {
-                min-height: 320px;
-                padding: 20px;
+                min-height: 280px;
             }
         }
     </style>
@@ -497,15 +531,11 @@
 <body>
 
 <header>
-    <div class="nav">
+    <div class="container nav">
 
-        <div class="logo">
-            <div class="logo-icon">🛡️</div>
-
-            <div>
-                DeepShield
-                <span style="color:#38bdf8;">AI</span>
-            </div>
+        <div class="brand">
+            <div class="brand-icon">🛡️</div>
+            <span>DeepShield AI</span>
         </div>
 
         <div class="status">
@@ -519,43 +549,43 @@
 
 <main>
 
-    <section class="hero">
+    <!-- HERO -->
+
+    <section class="hero container">
 
         <div class="eyebrow">
             🧠 AI MEDIA FORENSICS
         </div>
 
         <h1>
-            Detect the <span>Fake.</span><br>
+            Detect the Fake.<br>
             Protect the Truth.
         </h1>
 
         <p>
-            DeepShield AI is an intelligent digital forensics platform
-            designed to analyze images, videos and media for signs of
-            AI-generated or manipulated content.
+            Advanced digital media forensics designed to analyze suspicious
+            images and videos, identify abnormal patterns, and support
+            deepfake investigation workflows.
         </p>
 
     </section>
 
 
-    <section class="workspace">
+    <!-- WORKSPACE -->
 
-        <!-- Upload Area -->
-        <div class="card upload-card">
+    <section class="workspace container">
+
+        <!-- UPLOAD -->
+
+        <div class="card">
 
             <div class="card-title">
-
-                <h2>
-                    Media Analysis
-                </h2>
-
-                <span>
-                    SECURE UPLOAD
-                </span>
-
+                Media Analysis
             </div>
 
+            <div class="card-subtitle">
+                Upload a file to begin forensic inspection.
+            </div>
 
             <label
                 class="drop-zone"
@@ -563,42 +593,29 @@
                 for="fileInput"
             >
 
-                <div>
+                <div class="upload-icon">
+                    🔍
+                </div>
 
-                    <div class="upload-icon">
-                        🔍
-                    </div>
+                <h3>
+                    Upload media for analysis
+                </h3>
 
-                    <h3>
-                        Upload media for analysis
-                    </h3>
+                <p>
+                    Drag & drop your file here or select one manually.
+                </p>
 
-                    <p>
-                        Drag & drop an image or video here,
-                        or select a file from your device.
-                    </p>
+                <span class="choose-btn">
+                    Select File
+                </span>
 
-                    <div class="browse">
-                        Select File
-                    </div>
-
-                    <div class="formats">
-
-                        <span class="format">JPG</span>
-                        <span class="format">PNG</span>
-                        <span class="format">WEBP</span>
-                        <span class="format">GIF</span>
-                        <span class="format">MP4</span>
-                        <span class="format">WEBM</span>
-                        <span class="format">MOV</span>
-                        <span class="format">AVI</span>
-
-                    </div>
-
+                <div class="formats">
+                    Supported: JPG · PNG · WEBP · GIF · MP4 · WEBM · MOV · AVI
+                    <br>
+                    Maximum file size: 200 MB
                 </div>
 
             </label>
-
 
             <input
                 type="file"
@@ -606,112 +623,287 @@
                 accept="image/*,video/*"
             >
 
-
-            <div
-                class="file-selected"
-                id="fileSelected"
-            ></div>
-
+            <div id="fileSelected"></div>
 
             <button
-                class="scan-button"
+                class="scan-btn"
                 id="scanButton"
                 type="button"
             >
-                Start AI Analysis
+                🧠 Start AI Analysis
             </button>
 
         </div>
 
 
-        <!-- Result Area -->
-        <div class="card result-card">
+        <!-- RESULTS -->
+
+        <div class="card">
 
             <div class="card-title">
+                Forensic Analysis
+            </div>
 
-                <h2>
-                    Analysis Result
-                </h2>
+            <div class="card-subtitle">
+                Analysis results and media integrity indicators.
+            </div>
 
-                <span>
-                    DEEPSHIELD ENGINE
-                </span>
+
+            <!-- EMPTY -->
+
+            <div id="resultEmpty" class="result-empty">
+
+                <div class="result-empty-icon">
+                    🧬
+                </div>
+
+                <h3>
+                    Awaiting Media
+                </h3>
+
+                <p>
+                    Upload an image or video and start the analysis
+                    to generate forensic results.
+                </p>
 
             </div>
 
 
-            <div
-                class="result-empty"
-                id="resultEmpty"
-            >
+            <!-- RESULTS -->
 
-                <div>
+            <div id="analysisResult">
 
-                    <div class="scan-symbol">
-                        🧬
+                <div class="score-grid">
+
+                    <!-- AI -->
+
+                    <div class="metric-card">
+
+                        <div class="metric-label">
+                            AI Detection Confidence
+                        </div>
+
+                        <div
+                            class="metric-value ai-value"
+                            id="aiConfidence"
+                        >
+                            —
+                        </div>
+
+                        <div class="metric-note">
+                            Trained AI model not connected yet
+                        </div>
+
                     </div>
 
-                    <h3>
-                        Waiting for media
-                    </h3>
 
-                    <p>
-                        Upload an image or video to begin
-                        the forensic analysis process.
-                    </p>
+                    <!-- FORENSIC -->
+
+                    <div class="metric-card">
+
+                        <div class="metric-label">
+                            Forensic Anomaly Score
+                        </div>
+
+                        <div
+                            class="metric-value forensic-value"
+                            id="score"
+                        >
+                            —
+                        </div>
+
+                        <div class="metric-note">
+                            Browser-based forensic heuristics
+                        </div>
+
+                    </div>
 
                 </div>
 
-            </div>
 
+                <!-- ASSESSMENT -->
 
-            <div
-                class="analysis-result"
-                id="analysisResult"
-            >
+                <div class="assessment">
 
-                <div class="score-box">
-
-                    <div
-                        class="score"
-                        id="score"
-                    >
-                        87%
+                    <div class="assessment-label">
+                        Overall Assessment
                     </div>
 
-                    <div class="score-label">
-                        AI Manipulation Probability
-                    </div>
-
-                    <div class="risk">
-                        HIGH RISK
+                    <div id="riskLevel">
+                        Pending
                     </div>
 
                 </div>
 
+
+                <!-- INDICATORS -->
+
+                <div class="section-title">
+                    Analysis Indicators
+                </div>
 
                 <div class="indicators">
 
                     <div class="indicator">
-                        <span>Face Consistency</span>
-                        <span>Suspicious</span>
+                        <span class="indicator-name">
+                            File Structure
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorFileStructure"
+                        >
+                            —
+                        </span>
                     </div>
+
 
                     <div class="indicator">
-                        <span>Image Artifacts</span>
-                        <span>Detected</span>
+                        <span class="indicator-name">
+                            Media Resolution
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorResolution"
+                        >
+                            —
+                        </span>
                     </div>
+
 
                     <div class="indicator">
-                        <span>Compression Pattern</span>
-                        <span>Unusual</span>
+                        <span class="indicator-name">
+                            Aspect Ratio
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorAspect"
+                        >
+                            —
+                        </span>
                     </div>
+
 
                     <div class="indicator">
-                        <span>AI Generation Signals</span>
-                        <span>Detected</span>
+                        <span class="indicator-name">
+                            Edge Detail
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorEdges"
+                        >
+                            —
+                        </span>
                     </div>
 
+
+                    <div class="indicator">
+                        <span class="indicator-name">
+                            Noise Profile
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorNoise"
+                        >
+                            —
+                        </span>
+                    </div>
+
+
+                    <div class="indicator">
+                        <span class="indicator-name">
+                            Image Entropy
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorEntropy"
+                        >
+                            —
+                        </span>
+                    </div>
+
+
+                    <div class="indicator">
+                        <span class="indicator-name">
+                            Compression Pattern
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorCompression"
+                        >
+                            —
+                        </span>
+                    </div>
+
+
+                    <div class="indicator">
+                        <span class="indicator-name">
+                            Color Distribution
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorColor"
+                        >
+                            —
+                        </span>
+                    </div>
+
+
+                    <div class="indicator">
+                        <span class="indicator-name">
+                            Histogram Spread
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorHistogram"
+                        >
+                            —
+                        </span>
+                    </div>
+
+
+                    <div class="indicator">
+                        <span class="indicator-name">
+                            File Extension
+                        </span>
+
+                        <span
+                            class="indicator-status"
+                            id="indicatorExtension"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                </div>
+
+
+                <!-- DETAILS -->
+
+                <div class="section-title">
+                    Forensic Details
+                </div>
+
+                <div id="forensicDetails">
+                    Analysis details will appear here.
+                </div>
+
+
+                <!-- DISCLAIMER -->
+
+                <div class="disclaimer">
+                    ⚠️ Heuristic forensic analysis only.
+                    This result is not a definitive deepfake verdict.
+                    A trained AI model will be integrated in the next
+                    development stage.
                 </div>
 
             </div>
@@ -721,8 +913,9 @@
     </section>
 
 
-    <!-- Features -->
-    <section class="features">
+    <!-- FEATURES -->
+
+    <section class="features container">
 
         <div class="feature">
 
@@ -735,8 +928,8 @@
             </h3>
 
             <p>
-                Analyze digital media for patterns
-                associated with AI-generated content.
+                Designed for future integration with trained deepfake
+                detection models and machine-learning inference.
             </p>
 
         </div>
@@ -753,8 +946,8 @@
             </h3>
 
             <p>
-                Examine visual artifacts and media
-                characteristics to identify manipulation.
+                Analyze image characteristics, compression patterns,
+                noise, entropy, edges and other forensic signals.
             </p>
 
         </div>
@@ -771,8 +964,8 @@
             </h3>
 
             <p>
-                Designed around secure media analysis
-                and responsible digital investigation.
+                Browser-side analysis keeps the current forensic
+                processing local without automatically uploading media.
             </p>
 
         </div>
@@ -787,7 +980,6 @@
 </footer>
 
 
-<!-- DeepShield AI JavaScript -->
 <script src="js/app.js"></script>
 
 </body>
