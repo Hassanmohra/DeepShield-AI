@@ -1,3687 +1,2268 @@
-"use strict";
+/* =========================================================
+   DeepShield AI - app.js
+   Version 0.4
+   Real AI Deepfake Detection + Digital Forensics
+   ========================================================= */
 
-/*
- * DeepShield AI
- * Client-side Media Forensics Engine
- *
- * Version: 0.3
- *
- * Features:
- * - Image / video upload
- * - Drag & drop
- * - File validation
- * - Real image pixel analysis
- * - Luminance statistics
- * - Color distribution
- * - Saturation analysis
- * - Entropy estimation
- * - Edge / sharpness estimation
- * - Noise estimation
- * - Compression / blockiness estimation
- * - Deterministic forensic anomaly score
- * - AI Detection layer preparation
- * - ONNX model readiness detection
- *
- * IMPORTANT:
- * The forensic score is heuristic.
- * It is NOT a trained deepfake probability.
- *
- * AI Detection Confidence remains unavailable
- * until a real trained AI model is connected.
- */
+import { pipeline, env } from
+    "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.1";
+
+/* =========================================================
+   CONFIGURATION
+   ========================================================= */
+
+const CONFIG = {
+    modelId: "onnx-community/Deep-Fake-Detector-v2-Model-ONNX",
+
+    maxFileSizeMB: 200,
+
+    supportedImages: [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/bmp"
+    ],
+
+    supportedVideos: [
+        "video/mp4",
+        "video/webm",
+        "video/quicktime"
+    ]
+};
+
+/* =========================================================
+   HUGGING FACE / TRANSFORMERS.JS
+   ========================================================= */
+
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+
+let aiClassifier = null;
+let aiModelLoading = false;
+let aiModelReady = false;
+
+/* =========================================================
+   DOM HELPERS
+   ========================================================= */
+
+const $ = (selector) => document.querySelector(selector);
+
+function setText(selector, value) {
+    const element = $(selector);
+
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function setHTML(selector, value) {
+    const element = $(selector);
+
+    if (element) {
+        element.innerHTML = value;
+    }
+}
+
+/* =========================================================
+   DOM ELEMENTS
+   ========================================================= */
+
+const fileInput =
+    $("#fileInput") ||
+    $("#file") ||
+    document.querySelector('input[type="file"]');
+
+const dropZone =
+    $("#dropZone") ||
+    $(".drop-zone") ||
+    $("#uploadArea") ||
+    $(".upload-area");
+
+const analyzeButton =
+    $("#analyzeBtn") ||
+    $("#scanBtn") ||
+    $("#analyzeButton");
+
+const fileNameElement =
+    $("#fileName") ||
+    $("#selectedFileName");
+
+const resultSection =
+    $("#resultSection") ||
+    $("#results") ||
+    $("#analysisResult");
+
+const aiConfidence =
+    $("#aiConfidence");
+
+const aiStatus =
+    $("#aiStatus");
+
+const aiModelName =
+    $("#aiModelName");
+
+const aiClassification =
+    $("#aiClassification");
+
+const scoreElement =
+    $("#score");
+
+const riskElement =
+    $("#riskLevel") ||
+    $(".risk");
+
+const overallAssessment =
+    $("#overallAssessment");
+
+const analysisDetails =
+    $("#analysisDetails") ||
+    $("#forensicDetails");
+
+/* =========================================================
+   STATE
+   ========================================================= */
+
+let selectedFile = null;
+let selectedImage = null;
+let forensicResult = null;
+let aiResult = null;
+
+/* =========================================================
+   INITIALIZATION
+   ========================================================= */
 
 document.addEventListener("DOMContentLoaded", () => {
+    initializeDeepShield();
+});
 
-    /* =========================================================
-       DOM ELEMENTS
-    ========================================================= */
+function initializeDeepShield() {
 
-    const fileInput =
-        document.getElementById("fileInput");
+    setupFileInput();
+    setupDropZone();
+    setupAnalyzeButton();
 
-    const dropZone =
-        document.getElementById("dropZone");
+    resetUI();
 
-    const fileSelected =
-        document.getElementById("fileSelected");
+    /*
+     * Start loading the real AI model.
+     * The model is downloaded only when required.
+     */
+    preloadAIModel();
+}
 
-    const scanButton =
-        document.getElementById("scanButton");
+/* =========================================================
+   FILE INPUT
+   ========================================================= */
 
-    const resultEmpty =
-        document.getElementById("resultEmpty");
-
-    const analysisResult =
-        document.getElementById("analysisResult");
-
-    const scoreElement =
-        document.getElementById("score");
-
-    const aiConfidenceElement =
-        document.getElementById("aiConfidence");
-
-    const riskElement =
-        document.getElementById("riskLevel") ||
-        document.querySelector(".risk");
-
-    const overallAssessmentElement =
-        document.getElementById("overallAssessment");
-
-    const aiModelStatusElement =
-        document.getElementById("aiModelStatus");
-
-    const chooseMediaButton =
-        document.getElementById("chooseMedia") ||
-        document.getElementById("chooseMediaBtn") ||
-        document.getElementById("uploadButton") ||
-        document.getElementById("browseButton") ||
-        document.querySelector(".choose-media") ||
-        document.querySelector(".upload-button") ||
-        document.querySelector(".browse-button");
-
-
-    /* =========================================================
-       REQUIRED ELEMENT CHECK
-    ========================================================= */
+function setupFileInput() {
 
     if (!fileInput) {
+        console.warn("DeepShield: file input not found.");
+        return;
+    }
 
-        console.error(
-            "DeepShield AI: #fileInput was not found."
-        );
+    fileInput.addEventListener("change", (event) => {
+
+        const file =
+            event.target.files &&
+            event.target.files[0];
+
+        if (file) {
+            handleFile(file);
+        }
+    });
+}
+
+/* =========================================================
+   DROP ZONE
+   ========================================================= */
+
+function setupDropZone() {
+
+    if (!dropZone) {
+        return;
+    }
+
+    dropZone.addEventListener("click", () => {
+
+        if (fileInput) {
+            fileInput.click();
+        }
+
+    });
+
+    dropZone.addEventListener("dragover", (event) => {
+
+        event.preventDefault();
+
+        dropZone.classList.add("drag-over");
+
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+
+        dropZone.classList.remove("drag-over");
+
+    });
+
+    dropZone.addEventListener("drop", (event) => {
+
+        event.preventDefault();
+
+        dropZone.classList.remove("drag-over");
+
+        const file =
+            event.dataTransfer.files &&
+            event.dataTransfer.files[0];
+
+        if (file) {
+            handleFile(file);
+        }
+    });
+}
+
+/* =========================================================
+   ANALYZE BUTTON
+   ========================================================= */
+
+function setupAnalyzeButton() {
+
+    if (!analyzeButton) {
+        console.warn("DeepShield: analyze button not found.");
+        return;
+    }
+
+    analyzeButton.addEventListener("click", async () => {
+
+        if (!selectedFile) {
+            showMessage("Please select an image first.");
+            return;
+        }
+
+        await analyzeSelectedFile();
+
+    });
+}
+
+/* =========================================================
+   FILE HANDLING
+   ========================================================= */
+
+function handleFile(file) {
+
+    clearMessage();
+
+    const validation =
+        validateFile(file);
+
+    if (!validation.valid) {
+
+        showMessage(validation.message);
+
+        selectedFile = null;
+        selectedImage = null;
 
         return;
     }
 
+    selectedFile = file;
 
-    /* =========================================================
-       CONFIGURATION
-    ========================================================= */
-
-    const CONFIG = {
-
-        maxFileSize:
-            200 * 1024 * 1024,
-
-        allowedImageTypes: [
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "image/gif"
-        ],
-
-        allowedVideoTypes: [
-            "video/mp4",
-            "video/webm",
-            "video/quicktime",
-            "video/x-msvideo"
-        ],
-
-        allowedExtensions: [
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".webp",
-            ".gif",
-            ".mp4",
-            ".webm",
-            ".mov",
-            ".avi"
-        ],
-
-        analysisMaxDimension:
-            420,
-
-        maxAnalysisPixels:
-            170000,
-
-        /*
-         * Future AI model.
-         *
-         * When we add the real ONNX model,
-         * this path will be used.
-         */
-
-        aiModelPath:
-            "models/deepfake-detector.onnx",
-
-        /*
-         * Disabled until a real trained model
-         * is actually available.
-         */
-
-        aiModelEnabled:
-            false
-
-    };
-
-
-    /* =========================================================
-       STATE
-    ========================================================= */
-
-    let selectedFile =
-        null;
-
-    let analysisInProgress =
-        false;
-
-    let aiModel =
-        null;
-
-    let aiModelAvailable =
-        false;
-
-
-    /* =========================================================
-       FILE SELECTOR
-    ========================================================= */
-
-    function openFileSelector(event) {
-
-        if (event) {
-
-            event.preventDefault();
-            event.stopPropagation();
-
-        }
-
-        if (
-            fileInput &&
-            !analysisInProgress
-        ) {
-
-            fileInput.click();
-
-        }
-
-    }
-
-
-    /* =========================================================
-       DROP ZONE CLICK
-    ========================================================= */
-
-    if (dropZone) {
-
-        dropZone.addEventListener(
-            "click",
-            event => {
-
-                if (
-                    event.target.closest("button") ||
-                    event.target.closest("input")
-                ) {
-
-                    return;
-
-                }
-
-                openFileSelector(event);
-
-            }
-        );
-
-    }
-
-
-    /* =========================================================
-       CUSTOM UPLOAD BUTTON
-    ========================================================= */
-
-    if (chooseMediaButton) {
-
-        chooseMediaButton.addEventListener(
-            "click",
-            event => {
-
-                openFileSelector(event);
-
-            }
-        );
-
-    }
-
-
-    /* =========================================================
-       FILE INPUT
-    ========================================================= */
-
-    fileInput.addEventListener(
-        "change",
-        event => {
-
-            const files =
-                event.target.files;
-
-            if (
-                !files ||
-                files.length === 0
-            ) {
-
-                return;
-
-            }
-
-            processSelectedFile(
-                files[0]
-            );
-
-        }
-    );
-
-
-    /* =========================================================
-       DRAG EVENTS
-    ========================================================= */
-
-    if (dropZone) {
-
-        dropZone.addEventListener(
-            "dragover",
-            event => {
-
-                event.preventDefault();
-
-                dropZone.classList.add(
-                    "dragover"
-                );
-
-            }
-        );
-
-
-        dropZone.addEventListener(
-            "dragenter",
-            event => {
-
-                event.preventDefault();
-
-                dropZone.classList.add(
-                    "dragover"
-                );
-
-            }
-        );
-
-
-        dropZone.addEventListener(
-            "dragleave",
-            event => {
-
-                event.preventDefault();
-
-                if (
-                    event.target === dropZone
-                ) {
-
-                    dropZone.classList.remove(
-                        "dragover"
-                    );
-
-                }
-
-            }
-        );
-
-
-        dropZone.addEventListener(
-            "drop",
-            event => {
-
-                event.preventDefault();
-
-                dropZone.classList.remove(
-                    "dragover"
-                );
-
-                const files =
-                    event.dataTransfer.files;
-
-                if (
-                    !files ||
-                    files.length === 0
-                ) {
-
-                    return;
-
-                }
-
-                processSelectedFile(
-                    files[0]
-                );
-
-            }
-        );
-
-    }
-
-
-    /* =========================================================
-       PROCESS FILE
-    ========================================================= */
-
-    function processSelectedFile(file) {
-
-        if (!file) {
-
-            return;
-
-        }
-
-
-        const validation =
-            validateFile(file);
-
-
-        if (!validation.valid) {
-
-            showMessage(
-                validation.message,
-                "error"
-            );
-
-            resetSelection();
-
-            return;
-
-        }
-
-
-        selectedFile =
-            file;
-
-
-        displaySelectedFile(
-            file
-        );
-
-
-        resetAnalysis();
-
-
-        if (scanButton) {
-
-            scanButton.disabled =
-                false;
-
-            scanButton.style.opacity =
-                "1";
-
-            scanButton.style.cursor =
-                "pointer";
-
-        }
-
-
-        console.log(
-            "DeepShield AI: Selected:",
-            file.name
-        );
-
-    }
-
-
-    /* =========================================================
-       VALIDATE FILE
-    ========================================================= */
-
-    function validateFile(file) {
-
-        if (!file) {
-
-            return {
-                valid: false,
-                message:
-                    "No file selected."
-            };
-
-        }
-
-
-        if (
-            file.size >
-            CONFIG.maxFileSize
-        ) {
-
-            return {
-                valid: false,
-                message:
-                    "File is too large. Maximum size is 200 MB."
-            };
-
-        }
-
-
-        const extension =
-            getFileExtension(
-                file.name
-            );
-
-
-        const validType =
-            CONFIG.allowedImageTypes.includes(
-                file.type
-            ) ||
-            CONFIG.allowedVideoTypes.includes(
-                file.type
-            );
-
-
-        const validExtension =
-            CONFIG.allowedExtensions.includes(
-                extension
-            );
-
-
-        if (
-            !validType &&
-            !validExtension
-        ) {
-
-            return {
-                valid: false,
-                message:
-                    "Unsupported file type. Please upload an image or video."
-            };
-
-        }
-
-
-        return {
-            valid: true
-        };
-
-    }
-
-
-    /* =========================================================
-       DISPLAY SELECTED FILE
-    ========================================================= */
-
-    function displaySelectedFile(file) {
-
-        if (!fileSelected) {
-
-            return;
-
-        }
-
-
-        fileSelected.style.display =
-            "block";
-
-
-        fileSelected.innerHTML = `
-            ✓ <strong>${escapeHTML(file.name)}</strong>
-            <br>
-            <span style="opacity:0.75;">
-                ${escapeHTML(
-                    file.type || "Unknown media type"
-                )}
-                •
-                ${formatFileSize(file.size)}
-            </span>
-        `;
-
-
-        if (dropZone) {
-
-            dropZone.classList.add(
-                "file-selected"
-            );
-
-        }
-
-    }
-
-
-    /* =========================================================
-       START ANALYSIS
-    ========================================================= */
-
-    if (scanButton) {
-
-        scanButton.addEventListener(
-            "click",
-            async () => {
-
-                if (analysisInProgress) {
-
-                    return;
-
-                }
-
-
-                if (!selectedFile) {
-
-                    showMessage(
-                        "Please select an image or video first.",
-                        "warning"
-                    );
-
-                    return;
-
-                }
-
-
-                analysisInProgress =
-                    true;
-
-
-                setButtonState(
-                    "Analyzing Media...",
-                    true
-                );
-
-
-                try {
-
-                    const report =
-                        await performLocalAnalysis(
-                            selectedFile
-                        );
-
-
-                    displayAnalysisResult(
-                        report
-                    );
-
-                }
-
-                catch (error) {
-
-                    console.error(
-                        "DeepShield analysis error:",
-                        error
-                    );
-
-
-                    showMessage(
-                        "An error occurred while analyzing the media.",
-                        "error"
-                    );
-
-                }
-
-                finally {
-
-                    analysisInProgress =
-                        false;
-
-
-                    setButtonState(
-                        "Start AI Analysis",
-                        false
-                    );
-
-                }
-
-            }
-        );
-
-    }
-
-
-    /* =========================================================
-       MAIN ANALYSIS ENGINE
-    ========================================================= */
-
-    async function performLocalAnalysis(file) {
-
-        const metadata =
-            await inspectMedia(file);
-
-
-        let pixelAnalysis =
-            null;
-
-
-        if (
-            getMediaType(file) === "image"
-        ) {
-
-            pixelAnalysis =
-                await analyzeImagePixels(
-                    file
-                );
-
-        }
-
-
-        const indicators =
-            generateForensicIndicators(
-                file,
-                metadata,
-                pixelAnalysis
-            );
-
-
-        const forensicScore =
-            calculateForensicScore(
-                file,
-                metadata,
-                pixelAnalysis,
-                indicators
-            );
-
-
-        /*
-         * AI analysis.
-         *
-         * At this stage this returns
-         * "not available" instead of inventing
-         * a fake confidence value.
-         */
-
-        const aiResult =
-            await runAIDetection(
-                file,
-                pixelAnalysis
-            );
-
-
-        const overall =
-            calculateOverallAssessment(
-                forensicScore,
-                aiResult
-            );
-
-
-        return {
-
-            fileName:
-                file.name,
-
-            fileSize:
-                file.size,
-
-            fileType:
-                file.type,
-
-            mediaType:
-                getMediaType(file),
-
-            metadata,
-
-            pixelAnalysis,
-
-            indicators,
-
-            score:
-                forensicScore,
-
-            risk:
-                getRiskLevel(
-                    forensicScore
-                ),
-
-            aiDetection:
-                aiResult,
-
-            overallAssessment:
-                overall,
-
-            generatedAt:
-                new Date().toISOString(),
-
-            engine:
-                "DeepShield Visual Forensics v0.3",
-
-            disclaimer:
-                "Heuristic forensic analysis. AI confidence is unavailable until a trained detection model is connected."
-
-        };
-
-    }
-
-
-    /* =========================================================
-       AI DETECTION ENGINE
-       ========================================================= */
-
-    async function runAIDetection(
-        file,
-        pixelAnalysis
-    ) {
-
-        /*
-         * IMPORTANT:
-         *
-         * We do NOT generate a fake AI percentage.
-         *
-         * The current project does not contain
-         * a trained deepfake model yet.
-         */
-
-
-        if (
-            !CONFIG.aiModelEnabled
-        ) {
-
-            return {
-
-                available:
-                    false,
-
-                confidence:
-                    null,
-
-                label:
-                    "AI Model Not Connected",
-
-                model:
-                    "Not loaded",
-
-                message:
-                    "A trained AI deepfake detection model has not been connected yet."
-
-            };
-
-        }
-
-
-        /*
-         * Future ONNX implementation.
-         *
-         * The actual model will be loaded here.
-         */
-
-        if (!aiModelAvailable) {
-
-            return {
-
-                available:
-                    false,
-
-                confidence:
-                    null,
-
-                label:
-                    "AI Model Unavailable",
-
-                model:
-                    CONFIG.aiModelPath,
-
-                message:
-                    "The configured AI model could not be loaded."
-
-            };
-
-        }
-
-
-        /*
-         * Placeholder for real model inference.
-         *
-         * This section will be replaced when
-         * the trained model is added.
-         */
-
-        return {
-
-            available:
-                false,
-
-            confidence:
-                null,
-
-            label:
-                "AI Inference Pending",
-
-            model:
-                CONFIG.aiModelPath,
-
-            message:
-                "AI inference is not available yet."
-
-        };
-
-    }
-
-
-    /* =========================================================
-       FUTURE AI MODEL LOADER
-       ========================================================= */
-
-    async function loadAIModel() {
-
-        /*
-         * The ONNX Runtime Web library will be
-         * connected here in the next stage.
-         *
-         * Example future workflow:
-         *
-         * ort.InferenceSession.create(
-         *     CONFIG.aiModelPath
-         * )
-         *
-         * We intentionally do not execute it
-         * before the actual model is present.
-         */
-
-
-        if (
-            !CONFIG.aiModelEnabled
-        ) {
-
-            updateAIModelStatus(
-                "AI MODEL NOT CONNECTED"
-            );
-
-            return false;
-
-        }
-
-
-        try {
-
-            /*
-             * Future implementation.
-             */
-
-            aiModel =
-                null;
-
-            aiModelAvailable =
-                false;
-
-
-            updateAIModelStatus(
-                "AI MODEL UNAVAILABLE"
-            );
-
-
-            return false;
-
-        }
-
-        catch (error) {
-
-            console.error(
-                "DeepShield AI model loading error:",
-                error
-            );
-
-
-            aiModel =
-                null;
-
-            aiModelAvailable =
-                false;
-
-
-            updateAIModelStatus(
-                "AI MODEL ERROR"
-            );
-
-
-            return false;
-
-        }
-
-    }
-
-
-    /* =========================================================
-       AI MODEL STATUS
-    ========================================================= */
-
-    function updateAIModelStatus(
-        status
-    ) {
-
-        if (
-            aiModelStatusElement
-        ) {
-
-            aiModelStatusElement.textContent =
-                status;
-
-        }
-
-    }
-
-
-    /* =========================================================
-       OVERALL ASSESSMENT
-    ========================================================= */
-
-    function calculateOverallAssessment(
-        forensicScore,
-        aiResult
-    ) {
-
-        /*
-         * If AI is unavailable,
-         * assessment is based ONLY on
-         * forensic anomaly analysis.
-         */
-
-        if (
-            !aiResult.available
-        ) {
-
-            if (
-                forensicScore >= 70
-            ) {
-
-                return {
-                    title:
-                        "HIGH FORENSIC ANOMALY",
-
-                    description:
-                        "Multiple forensic signals require further investigation.",
-
-                    level:
-                        "high"
-
-                };
-
-            }
-
-
-            if (
-                forensicScore >= 40
-            ) {
-
-                return {
-                    title:
-                        "MODERATE FORENSIC ANOMALY",
-
-                    description:
-                        "Some forensic signals were detected and should be reviewed.",
-
-                    level:
-                        "medium"
-
-                };
-
-            }
-
-
-            return {
-
-                title:
-                    "LOW FORENSIC ANOMALY",
-
-                description:
-                    "No strong forensic anomaly signals were detected.",
-
-                level:
-                    "low"
-
-            };
-
-        }
-
-
-        /*
-         * Future combined AI + forensic logic.
-         */
-
-        const confidence =
-            aiResult.confidence;
-
-
-        if (
-            confidence >= 80 &&
-            forensicScore >= 50
-        ) {
-
-            return {
-
-                title:
-                    "HIGH MANIPULATION RISK",
-
-                description:
-                    "AI detection and forensic analysis both indicate possible manipulation.",
-
-                level:
-                    "high"
-
-            };
-
-        }
-
-
-        if (
-            confidence >= 60 ||
-            forensicScore >= 50
-        ) {
-
-            return {
-
-                title:
-                    "POSSIBLE MANIPULATION",
-
-                description:
-                    "One or more analysis systems detected signals requiring review.",
-
-                level:
-                    "medium"
-
-            };
-
-        }
-
-
-        return {
-
-            title:
-                "LOW MANIPULATION RISK",
-
-            description:
-                "The available analysis systems detected no strong manipulation signals.",
-
-            level:
-                "low"
-
-        };
-
-    }
-
-
-    /* =========================================================
-       MEDIA INSPECTION
-    ========================================================= */
-
-    function inspectMedia(file) {
-
-        return new Promise(resolve => {
-
-            const mediaType =
-                getMediaType(file);
-
-
-            if (
-                mediaType === "image"
-            ) {
-
-                const image =
-                    new Image();
-
-
-                const objectURL =
-                    URL.createObjectURL(file);
-
-
-                image.onload = () => {
-
-                    const metadata = {
-
-                        width:
-                            image.naturalWidth,
-
-                        height:
-                            image.naturalHeight,
-
-                        aspectRatio:
-                            calculateAspectRatio(
-                                image.naturalWidth,
-                                image.naturalHeight
-                            ),
-
-                        format:
-                            file.type ||
-                            "unknown"
-
-                    };
-
-
-                    URL.revokeObjectURL(
-                        objectURL
-                    );
-
-
-                    resolve(
-                        metadata
-                    );
-
-                };
-
-
-                image.onerror = () => {
-
-                    URL.revokeObjectURL(
-                        objectURL
-                    );
-
-
-                    resolve({
-
-                        format:
-                            file.type ||
-                            "unknown"
-
-                    });
-
-                };
-
-
-                image.src =
-                    objectURL;
-
-
-                return;
-
-            }
-
-
-            if (
-                mediaType === "video"
-            ) {
-
-                const video =
-                    document.createElement(
-                        "video"
-                    );
-
-
-                const objectURL =
-                    URL.createObjectURL(file);
-
-
-                video.preload =
-                    "metadata";
-
-
-                video.onloadedmetadata =
-                    () => {
-
-                        const metadata = {
-
-                            width:
-                                video.videoWidth,
-
-                            height:
-                                video.videoHeight,
-
-                            duration:
-                                Number(
-                                    video.duration.toFixed(
-                                        2
-                                    )
-                                ),
-
-                            aspectRatio:
-                                calculateAspectRatio(
-                                    video.videoWidth,
-                                    video.videoHeight
-                                ),
-
-                            format:
-                                file.type ||
-                                "unknown"
-
-                        };
-
-
-                        URL.revokeObjectURL(
-                            objectURL
-                        );
-
-
-                        resolve(
-                            metadata
-                        );
-
-                    };
-
-
-                video.onerror = () => {
-
-                    URL.revokeObjectURL(
-                        objectURL
-                    );
-
-
-                    resolve({
-
-                        format:
-                            file.type ||
-                            "unknown"
-
-                    });
-
-                };
-
-
-                video.src =
-                    objectURL;
-
-
-                return;
-
-            }
-
-
-            resolve({});
-
-        });
-
-    }
-
-
-    /* =========================================================
-       REAL IMAGE PIXEL ANALYSIS
-    ========================================================= */
-
-    function analyzeImagePixels(file) {
-
-        return new Promise(
-            (resolve, reject) => {
-
-                const image =
-                    new Image();
-
-
-                const objectURL =
-                    URL.createObjectURL(
-                        file
-                    );
-
-
-                image.onload = () => {
-
-                    try {
-
-                        const originalWidth =
-                            image.naturalWidth;
-
-                        const originalHeight =
-                            image.naturalHeight;
-
-
-                        let width =
-                            originalWidth;
-
-                        let height =
-                            originalHeight;
-
-
-                        const maxDimension =
-                            CONFIG.analysisMaxDimension;
-
-
-                        if (
-                            Math.max(
-                                width,
-                                height
-                            ) >
-                            maxDimension
-                        ) {
-
-                            const scale =
-                                maxDimension /
-                                Math.max(
-                                    width,
-                                    height
-                                );
-
-
-                            width =
-                                Math.max(
-                                    1,
-                                    Math.round(
-                                        width *
-                                        scale
-                                    )
-                                );
-
-
-                            height =
-                                Math.max(
-                                    1,
-                                    Math.round(
-                                        height *
-                                        scale
-                                    )
-                                );
-
-                        }
-
-
-                        let pixelCount =
-                            width *
-                            height;
-
-
-                        if (
-                            pixelCount >
-                            CONFIG.maxAnalysisPixels
-                        ) {
-
-                            const scale =
-                                Math.sqrt(
-                                    CONFIG.maxAnalysisPixels /
-                                    pixelCount
-                                );
-
-
-                            width =
-                                Math.max(
-                                    1,
-                                    Math.round(
-                                        width *
-                                        scale
-                                    )
-                                );
-
-
-                            height =
-                                Math.max(
-                                    1,
-                                    Math.round(
-                                        height *
-                                        scale
-                                    )
-                                );
-
-                        }
-
-
-                        const canvas =
-                            document.createElement(
-                                "canvas"
-                            );
-
-
-                        canvas.width =
-                            width;
-
-                        canvas.height =
-                            height;
-
-
-                        const ctx =
-                            canvas.getContext(
-                                "2d",
-                                {
-                                    willReadFrequently:
-                                        true
-                                }
-                            );
-
-
-                        ctx.drawImage(
-                            image,
-                            0,
-                            0,
-                            width,
-                            height
-                        );
-
-
-                        const imageData =
-                            ctx.getImageData(
-                                0,
-                                0,
-                                width,
-                                height
-                            );
-
-
-                        const result =
-                            calculatePixelStatistics(
-                                imageData.data,
-                                width,
-                                height
-                            );
-
-
-                        result.originalWidth =
-                            originalWidth;
-
-                        result.originalHeight =
-                            originalHeight;
-
-                        result.analyzedWidth =
-                            width;
-
-                        result.analyzedHeight =
-                            height;
-
-
-                        URL.revokeObjectURL(
-                            objectURL
-                        );
-
-
-                        resolve(
-                            result
-                        );
-
-                    }
-
-                    catch (error) {
-
-                        URL.revokeObjectURL(
-                            objectURL
-                        );
-
-                        reject(error);
-
-                    }
-
-                };
-
-
-                image.onerror = () => {
-
-                    URL.revokeObjectURL(
-                        objectURL
-                    );
-
-
-                    reject(
-                        new Error(
-                            "Unable to decode image."
-                        )
-                    );
-
-                };
-
-
-                image.src =
-                    objectURL;
-
-            }
-        );
-
-    }
-
-
-    /* =========================================================
-       PIXEL STATISTICS
-    ========================================================= */
-
-    function calculatePixelStatistics(
-        data,
-        width,
-        height
-    ) {
-
-        const pixelCount =
-            width *
-            height;
-
-
-        const histogram =
-            new Array(256).fill(0);
-
-
-        let sumR = 0;
-        let sumG = 0;
-        let sumB = 0;
-
-        let sumL = 0;
-        let sumL2 = 0;
-
-        let sumS = 0;
-        let sumS2 = 0;
-
-
-        for (
-            let i = 0;
-            i < data.length;
-            i += 4
-        ) {
-
-            const r =
-                data[i];
-
-            const g =
-                data[i + 1];
-
-            const b =
-                data[i + 2];
-
-
-            const luminance =
-                0.2126 * r +
-                0.7152 * g +
-                0.0722 * b;
-
-
-            const max =
-                Math.max(
-                    r,
-                    g,
-                    b
-                );
-
-
-            const min =
-                Math.min(
-                    r,
-                    g,
-                    b
-                );
-
-
-            const saturation =
-                max === 0
-                    ? 0
-                    : (
-                        (max - min) /
-                        max
-                    );
-
-
-            const gray =
-                Math.max(
-                    0,
-                    Math.min(
-                        255,
-                        Math.round(
-                            luminance
-                        )
-                    )
-                );
-
-
-            histogram[gray]++;
-
-
-            sumR += r;
-            sumG += g;
-            sumB += b;
-
-            sumL += luminance;
-            sumL2 +=
-                luminance *
-                luminance;
-
-            sumS += saturation;
-            sumS2 +=
-                saturation *
-                saturation;
-
-        }
-
-
-        const meanR =
-            sumR /
-            pixelCount;
-
-
-        const meanG =
-            sumG /
-            pixelCount;
-
-
-        const meanB =
-            sumB /
-            pixelCount;
-
-
-        const meanL =
-            sumL /
-            pixelCount;
-
-
-        const varianceL =
-            Math.max(
-                0,
-                (
-                    sumL2 /
-                    pixelCount
-                ) -
-                (
-                    meanL *
-                    meanL
-                )
-            );
-
-
-        const stdL =
-            Math.sqrt(
-                varianceL
-            );
-
-
-        const meanS =
-            sumS /
-            pixelCount;
-
-
-        const varianceS =
-            Math.max(
-                0,
-                (
-                    sumS2 /
-                    pixelCount
-                ) -
-                (
-                    meanS *
-                    meanS
-                )
-            );
-
-
-        const stdS =
-            Math.sqrt(
-                varianceS
-            );
-
-
-        let entropy =
-            0;
-
-
-        for (
-            let i = 0;
-            i < histogram.length;
-            i++
-        ) {
-
-            if (
-                histogram[i] === 0
-            ) {
-
-                continue;
-
-            }
-
-
-            const p =
-                histogram[i] /
-                pixelCount;
-
-
-            entropy -=
-                p *
-                Math.log2(p);
-
-        }
-
-
-        let edgeSum = 0;
-
-        let edgeSamples = 0;
-
-        let noiseSum = 0;
-
-        let noiseSamples = 0;
-
-        let blockBoundarySum = 0;
-
-        let blockInteriorSum = 0;
-
-        let blockBoundarySamples = 0;
-
-        let blockInteriorSamples = 0;
-
-
-        function getGray(x, y) {
-
-            const index =
-                (
-                    y *
-                    width +
-                    x
-                ) *
-                4;
-
-
-            return (
-                0.2126 * data[index] +
-                0.7152 * data[index + 1] +
-                0.0722 * data[index + 2]
-            );
-
-        }
-
-
-        const step =
-            Math.max(
-                1,
-                Math.floor(
-                    Math.sqrt(
-                        pixelCount /
-                        80000
-                    )
-                )
-            );
-
-
-        for (
-            let y = 1;
-            y < height - 1;
-            y += step
-        ) {
-
-            for (
-                let x = 1;
-                x < width - 1;
-                x += step
-            ) {
-
-                const current =
-                    getGray(
-                        x,
-                        y
-                    );
-
-
-                const right =
-                    getGray(
-                        x + 1,
-                        y
-                    );
-
-
-                const down =
-                    getGray(
-                        x,
-                        y + 1
-                    );
-
-
-                const left =
-                    getGray(
-                        x - 1,
-                        y
-                    );
-
-
-                const up =
-                    getGray(
-                        x,
-                        y - 1
-                    );
-
-
-                const gradient =
-                    (
-                        Math.abs(
-                            current -
-                            right
-                        ) +
-                        Math.abs(
-                            current -
-                            down
-                        )
-                    ) / 2;
-
-
-                edgeSum +=
-                    gradient;
-
-                edgeSamples++;
-
-
-                const neighborAverage =
-                    (
-                        right +
-                        down +
-                        left +
-                        up
-                    ) / 4;
-
-
-                const residual =
-                    Math.abs(
-                        current -
-                        neighborAverage
-                    );
-
-
-                noiseSum +=
-                    residual;
-
-                noiseSamples++;
-
-
-                if (
-                    x % 8 === 0
-                ) {
-
-                    blockBoundarySum +=
-                        Math.abs(
-                            current -
-                            left
-                        );
-
-                    blockBoundarySamples++;
-
-                }
-                else {
-
-                    blockInteriorSum +=
-                        Math.abs(
-                            current -
-                            left
-                        );
-
-                    blockInteriorSamples++;
-
-                }
-
-            }
-
-        }
-
-
-        const edgeStrength =
-            edgeSamples > 0
-                ? edgeSum /
-                  edgeSamples
-                : 0;
-
-
-        const noiseLevel =
-            noiseSamples > 0
-                ? noiseSum /
-                  noiseSamples
-                : 0;
-
-
-        const boundaryAverage =
-            blockBoundarySamples > 0
-                ? blockBoundarySum /
-                  blockBoundarySamples
-                : 0;
-
-
-        const interiorAverage =
-            blockInteriorSamples > 0
-                ? blockInteriorSum /
-                  blockInteriorSamples
-                : 0;
-
-
-        const blockinessRatio =
-            interiorAverage > 0
-                ? boundaryAverage /
-                  interiorAverage
-                : 1;
-
-
-        const channelMean =
-            (
-                meanR +
-                meanG +
-                meanB
-            ) / 3;
-
-
-        const channelDeviation =
-            Math.sqrt(
-                (
-                    Math.pow(
-                        meanR -
-                        channelMean,
-                        2
-                    ) +
-                    Math.pow(
-                        meanG -
-                        channelMean,
-                        2
-                    ) +
-                    Math.pow(
-                        meanB -
-                        channelMean,
-                        2
-                    )
-                ) / 3
-            );
-
-
-        return {
-
-            meanRed:
-                round(meanR),
-
-            meanGreen:
-                round(meanG),
-
-            meanBlue:
-                round(meanB),
-
-            luminanceMean:
-                round(meanL),
-
-            luminanceStd:
-                round(stdL),
-
-            saturationMean:
-                round(
-                    meanS * 100
-                ),
-
-            saturationStd:
-                round(
-                    stdS * 100
-                ),
-
-            entropy:
-                round(
-                    entropy,
-                    3
-                ),
-
-            edgeStrength:
-                round(
-                    edgeStrength,
-                    3
-                ),
-
-            noiseLevel:
-                round(
-                    noiseLevel,
-                    3
-                ),
-
-            blockinessRatio:
-                round(
-                    blockinessRatio,
-                    3
-                ),
-
-            channelDeviation:
-                round(
-                    channelDeviation,
-                    3
-                ),
-
-            histogramRange:
-                calculateHistogramRange(
-                    histogram,
-                    pixelCount
-                )
-
-        };
-
-    }
-
-
-    /* =========================================================
-       HISTOGRAM RANGE
-    ========================================================= */
-
-    function calculateHistogramRange(
-        histogram,
-        totalPixels
-    ) {
-
-        const threshold =
-            totalPixels *
-            0.01;
-
-
-        let low =
-            0;
-
-        let high =
-            255;
-
-        let accumulated =
-            0;
-
-
-        for (
-            let i = 0;
-            i < 256;
-            i++
-        ) {
-
-            accumulated +=
-                histogram[i];
-
-
-            if (
-                accumulated >=
-                threshold
-            ) {
-
-                low =
-                    i;
-
-                break;
-
-            }
-
-        }
-
-
-        accumulated =
-            0;
-
-
-        for (
-            let i = 255;
-            i >= 0;
-            i--
-        ) {
-
-            accumulated +=
-                histogram[i];
-
-
-            if (
-                accumulated >=
-                threshold
-            ) {
-
-                high =
-                    i;
-
-                break;
-
-            }
-
-        }
-
-
-        return {
-
-            low,
-
-            high,
-
-            range:
-                high - low
-
-        };
-
-    }
-
-
-    /* =========================================================
-       FORENSIC INDICATORS
-    ========================================================= */
-
-    function generateForensicIndicators(
-        file,
-        metadata,
-        pixels
-    ) {
-
-        const indicators = [];
-
-
-        indicators.push({
-
-            name:
-                "File Structure",
-
-            status:
-                file.size > 0
-                    ? "Normal"
-                    : "Suspicious",
-
-            severity:
-                file.size > 0
-                    ? "low"
-                    : "high"
-
-        });
-
-
-        if (
-            metadata.width &&
-            metadata.height
-        ) {
-
-            const pixelsCount =
-                metadata.width *
-                metadata.height;
-
-
-            indicators.push({
-
-                name:
-                    "Media Resolution",
-
-                status:
-                    pixelsCount >= 100000
-                        ? "Valid"
-                        : "Low Resolution",
-
-                severity:
-                    pixelsCount >= 100000
-                        ? "low"
-                        : "medium"
-
-            });
-
-        }
-
-
-        if (
-            metadata.aspectRatio
-        ) {
-
-            const unusual =
-                metadata.aspectRatio < 0.3 ||
-                metadata.aspectRatio > 3.5;
-
-
-            indicators.push({
-
-                name:
-                    "Aspect Ratio",
-
-                status:
-                    unusual
-                        ? "Unusual"
-                        : "Normal",
-
-                severity:
-                    unusual
-                        ? "medium"
-                        : "low"
-
-            });
-
-        }
-
-
-        if (pixels) {
-
-            indicators.push({
-
-                name:
-                    "Edge Detail",
-
-                status:
-                    classifyEdgeStrength(
-                        pixels.edgeStrength
-                    ),
-
-                severity:
-                    edgeSeverity(
-                        pixels.edgeStrength
-                    )
-
-            });
-
-
-            indicators.push({
-
-                name:
-                    "Noise Profile",
-
-                status:
-                    classifyNoise(
-                        pixels.noiseLevel
-                    ),
-
-                severity:
-                    noiseSeverity(
-                        pixels.noiseLevel
-                    )
-
-            });
-
-
-            indicators.push({
-
-                name:
-                    "Image Entropy",
-
-                status:
-                    classifyEntropy(
-                        pixels.entropy
-                    ),
-
-                severity:
-                    entropySeverity(
-                        pixels.entropy
-                    )
-
-            });
-
-
-            indicators.push({
-
-                name:
-                    "Compression Pattern",
-
-                status:
-                    classifyBlockiness(
-                        pixels.blockinessRatio
-                    ),
-
-                severity:
-                    blockinessSeverity(
-                        pixels.blockinessRatio
-                    )
-
-            });
-
-
-            indicators.push({
-
-                name:
-                    "Color Distribution",
-
-                status:
-                    classifyColorDistribution(
-                        pixels
-                    ),
-
-                severity:
-                    colorSeverity(
-                        pixels
-                    )
-
-            });
-
-
-            indicators.push({
-
-                name:
-                    "Histogram Spread",
-
-                status:
-                    `${pixels.histogramRange.range} / 255`,
-
-                severity:
-                    pixels.histogramRange.range < 80
-                        ? "medium"
-                        : "low"
-
-            });
-
-        }
-
-
-        const extension =
-            getFileExtension(
-                file.name
-            );
-
-
-        indicators.push({
-
-            name:
-                "File Extension",
-
-            status:
-                CONFIG.allowedExtensions.includes(
-                    extension
-                )
-                    ? "Supported"
-                    : "Unknown",
-
-            severity:
-                CONFIG.allowedExtensions.includes(
-                    extension
-                )
-                    ? "low"
-                    : "medium"
-
-        });
-
-
-        return indicators;
-
-    }
-
-
-    /* =========================================================
-       FORENSIC SCORE
-    ========================================================= */
-
-    function calculateForensicScore(
-        file,
-        metadata,
-        pixels,
-        indicators
-    ) {
-
-        /*
-         * This is an anomaly score.
-         * It is NOT AI deepfake probability.
-         */
-
-        if (!pixels) {
-
-            let videoScore =
-                10;
-
-
-            if (
-                metadata.duration &&
-                metadata.duration < 1
-            ) {
-
-                videoScore +=
-                    10;
-
-            }
-
-
-            return clamp(
-                videoScore,
-                1,
-                99
-            );
-
-        }
-
-
-        let score =
-            5;
-
-
-        if (
-            pixels.entropy < 3.5
-        ) {
-
-            score +=
-                10;
-
-        }
-        else if (
-            pixels.entropy < 4.5
-        ) {
-
-            score +=
-                4;
-
-        }
-
-
-        if (
-            pixels.noiseLevel < 0.8
-        ) {
-
-            score +=
-                8;
-
-        }
-        else if (
-            pixels.noiseLevel > 15
-        ) {
-
-            score +=
-                7;
-
-        }
-
-
-        if (
-            pixels.edgeStrength < 2
-        ) {
-
-            score +=
-                8;
-
-        }
-
-
-        if (
-            pixels.blockinessRatio > 1.35
-        ) {
-
-            score +=
-                12;
-
-        }
-        else if (
-            pixels.blockinessRatio > 1.18
-        ) {
-
-            score +=
-                5;
-
-        }
-
-
-        if (
-            pixels.histogramRange.range < 60
-        ) {
-
-            score +=
-                8;
-
-        }
-        else if (
-            pixels.histogramRange.range < 100
-        ) {
-
-            score +=
-                3;
-
-        }
-
-
-        if (
-            pixels.channelDeviation > 35
-        ) {
-
-            score +=
-                7;
-
-        }
-
-
-        if (
-            pixels.saturationStd < 4 &&
-            pixels.saturationMean > 60
-        ) {
-
-            score +=
-                5;
-
-        }
-
-
-        if (
-            metadata.width &&
-            metadata.height
-        ) {
-
-            const megapixels =
-                (
-                    metadata.width *
-                    metadata.height
-                ) / 1000000;
-
-
-            if (
-                megapixels > 2 &&
-                file.size < 100000
-            ) {
-
-                score +=
-                    4;
-
-            }
-
-        }
-
-
-        const mediumIndicators =
-            indicators.filter(
-                item =>
-                    item.severity === "medium"
-            ).length;
-
-
-        score +=
-            Math.min(
-                mediumIndicators * 2,
-                8
-            );
-
-
-        return clamp(
-            Math.round(score),
-            1,
-            99
-        );
-
-    }
-
-
-    /* =========================================================
-       CLASSIFICATION
-    ========================================================= */
-
-    function classifyEdgeStrength(value) {
-
-        if (value < 2) {
-            return "Very Low";
-        }
-
-        if (value < 5) {
-            return "Low";
-        }
-
-        if (value < 12) {
-            return "Normal";
-        }
-
-        if (value < 25) {
-            return "High";
-        }
-
-        return "Very High";
-
-    }
-
-
-    function edgeSeverity(value) {
-
-        if (
-            value < 2 ||
-            value > 40
-        ) {
-
-            return "medium";
-
-        }
-
-        return "low";
-
-    }
-
-
-    function classifyNoise(value) {
-
-        if (value < 0.8) {
-            return "Very Low";
-        }
-
-        if (value < 2.5) {
-            return "Low";
-        }
-
-        if (value < 7) {
-            return "Normal";
-        }
-
-        if (value < 15) {
-            return "High";
-        }
-
-        return "Very High";
-
-    }
-
-
-    function noiseSeverity(value) {
-
-        if (
-            value < 0.8 ||
-            value > 15
-        ) {
-
-            return "medium";
-
-        }
-
-        return "low";
-
-    }
-
-
-    function classifyEntropy(value) {
-
-        if (value < 3.5) {
-            return "Low Complexity";
-        }
-
-        if (value < 5) {
-            return "Moderate";
-        }
-
-        if (value < 7) {
-            return "High Complexity";
-        }
-
-        return "Very High";
-
-    }
-
-
-    function entropySeverity(value) {
-
-        if (value < 3.5) {
-            return "medium";
-        }
-
-        return "low";
-
-    }
-
-
-    function classifyBlockiness(value) {
-
-        if (value < 1.08) {
-            return "Low";
-        }
-
-        if (value < 1.18) {
-            return "Normal";
-        }
-
-        if (value < 1.35) {
-            return "Elevated";
-        }
-
-        return "Strong";
-
-    }
-
-
-    function blockinessSeverity(value) {
-
-        if (value > 1.35) {
-            return "medium";
-        }
-
-        return "low";
-
-    }
-
-
-    function classifyColorDistribution(
-        pixels
-    ) {
-
-        if (
-            pixels.channelDeviation > 35
-        ) {
-
-            return "Strong Channel Bias";
-
-        }
-
-
-        if (
-            pixels.saturationMean > 75
-        ) {
-
-            return "Highly Saturated";
-
-        }
-
-
-        if (
-            pixels.saturationMean < 8
-        ) {
-
-            return "Low Saturation";
-
-        }
-
-
-        return "Balanced";
-
-    }
-
-
-    function colorSeverity(
-        pixels
-    ) {
-
-        if (
-            pixels.channelDeviation > 35
-        ) {
-
-            return "medium";
-
-        }
-
-        return "low";
-
-    }
-
-
-    /* =========================================================
-       RISK LEVEL
-    ========================================================= */
-
-    function getRiskLevel(score) {
-
-        if (
-            score >= 70
-        ) {
-
-            return "HIGH";
-
-        }
-
-
-        if (
-            score >= 40
-        ) {
-
-            return "MEDIUM";
-
-        }
-
-
-        return "LOW";
-
-    }
-
-
-    /* =========================================================
-       DISPLAY RESULT
-    ========================================================= */
-
-    function displayAnalysisResult(
-        report
-    ) {
-
-        if (
-            !resultEmpty ||
-            !analysisResult
-        ) {
-
-            return;
-
-        }
-
-
-        resultEmpty.style.display =
-            "none";
-
-
-        analysisResult.style.display =
-            "block";
-
-
-        /*
-         * Forensic Score
-         */
-
-        if (
-            scoreElement
-        ) {
-
-            scoreElement.textContent =
-                `${report.score}%`;
-
-        }
-
-
-        /*
-         * AI Detection Confidence
-         *
-         * IMPORTANT:
-         * It stays "—" until the real model
-         * is connected.
-         */
-
-        if (
-            aiConfidenceElement
-        ) {
-
-            if (
-                report.aiDetection &&
-                report.aiDetection.available
-            ) {
-
-                aiConfidenceElement.textContent =
-                    `${report.aiDetection.confidence}%`;
-
-            }
-            else {
-
-                aiConfidenceElement.textContent =
-                    "—";
-
-            }
-
-        }
-
-
-        /*
-         * Risk
-         */
-
-        updateRiskLabel(
-            report.risk
-        );
-
-
-        /*
-         * Overall Assessment
-         */
-
-        updateOverallAssessment(
-            report
-        );
-
-
-        /*
-         * Indicators
-         */
-
-        updateIndicators(
-            report.indicators
-        );
-
-
-        /*
-         * Details
-         */
-
-        updateAnalysisDetails(
-            report
-        );
-
-    }
-
-
-    /* =========================================================
-       RISK LABEL
-    ========================================================= */
-
-    function updateRiskLabel(
-        risk
-    ) {
-
-        const element =
-            riskElement ||
-            analysisResult.querySelector(
-                ".risk"
-            );
-
-
-        if (!element) {
-
-            return;
-
-        }
-
-
-        element.textContent =
-            `${risk} ANOMALY`;
-
-    }
-
-
-    /* =========================================================
-       OVERALL ASSESSMENT UI
-    ========================================================= */
-
-    function updateOverallAssessment(
-        report
-    ) {
-
-        if (
-            overallAssessmentElement
-        ) {
-
-            overallAssessmentElement.innerHTML = `
-                <strong>
-                    ${escapeHTML(
-                        report.overallAssessment.title
-                    )}
-                </strong>
-                <br>
-                <span style="opacity:0.7;">
-                    ${escapeHTML(
-                        report.overallAssessment.description
-                    )}
-                </span>
-            `;
-
-            return;
-
-        }
-
-
-        /*
-         * If the new HTML element does not exist,
-         * create one automatically.
-         */
-
-        const assessment =
-            document.createElement(
-                "div"
-            );
-
-
-        assessment.id =
-            "overallAssessment";
-
-
-        assessment.style.marginTop =
-            "16px";
-
-
-        assessment.style.padding =
-            "14px";
-
-
-        assessment.style.borderRadius =
-            "12px";
-
-
-        assessment.style.background =
-            "rgba(255,255,255,0.025)";
-
-
-        assessment.style.border =
-            "1px solid rgba(255,255,255,0.06)";
-
-
-        assessment.innerHTML = `
-            <strong>
-                ${escapeHTML(
-                    report.overallAssessment.title
-                )}
-            </strong>
-            <br>
-            <span style="opacity:0.7;">
-                ${escapeHTML(
-                    report.overallAssessment.description
-                )}
-            </span>
-        `;
-
-
-        analysisResult.appendChild(
-            assessment
-        );
-
-    }
-
-
-    /* =========================================================
-       INDICATORS UI
-    ========================================================= */
-
-    function updateIndicators(
-        indicators
-    ) {
-
-        const container =
-            analysisResult.querySelector(
-                ".indicators"
-            );
-
-
-        if (!container) {
-
-            return;
-
-        }
-
-
-        container.innerHTML =
-            "";
-
-
-        indicators.forEach(
-            indicator => {
-
-                const row =
-                    document.createElement(
-                        "div"
-                    );
-
-
-                row.className =
-                    "indicator";
-
-
-                const name =
-                    document.createElement(
-                        "span"
-                    );
-
-
-                name.textContent =
-                    indicator.name;
-
-
-                const value =
-                    document.createElement(
-                        "span"
-                    );
-
-
-                value.textContent =
-                    indicator.status;
-
-
-                row.appendChild(
-                    name
-                );
-
-
-                row.appendChild(
-                    value
-                );
-
-
-                container.appendChild(
-                    row
-                );
-
-            }
-        );
-
-    }
-
-
-    /* =========================================================
-       ANALYSIS DETAILS
-    ========================================================= */
-
-    function updateAnalysisDetails(
-        report
-    ) {
-
-        let details =
-            document.getElementById(
-                "analysisDetails"
-            );
-
-
-        if (!details) {
-
-            details =
-                document.createElement(
-                    "div"
-                );
-
-
-            details.id =
-                "analysisDetails";
-
-
-            details.style.marginTop =
-                "18px";
-
-
-            details.style.padding =
-                "14px";
-
-
-            details.style.borderRadius =
-                "12px";
-
-
-            details.style.background =
-                "rgba(255,255,255,0.025)";
-
-
-            details.style.border =
-                "1px solid rgba(255,255,255,0.06)";
-
-
-            details.style.fontSize =
-                "11px";
-
-
-            details.style.lineHeight =
-                "1.7";
-
-
-            analysisResult.appendChild(
-                details
-            );
-
-        }
-
-
-        const dimensions =
-            report.metadata.width &&
-            report.metadata.height
-                ? `${report.metadata.width} × ${report.metadata.height}`
-                : "N/A";
-
-
-        let pixelDetails =
-            "";
-
-
-        if (
-            report.pixelAnalysis
-        ) {
-
-            const p =
-                report.pixelAnalysis;
-
-
-            pixelDetails = `
-                <br>
-                <br>
-                <strong>Pixel Forensics</strong>
-                <br>
-                Luminance Mean:
-                ${p.luminanceMean}
-                <br>
-                Luminance Std:
-                ${p.luminanceStd}
-                <br>
-                Saturation:
-                ${p.saturationMean}%
-                <br>
-                Entropy:
-                ${p.entropy}
-                <br>
-                Edge Strength:
-                ${p.edgeStrength}
-                <br>
-                Noise Level:
-                ${p.noiseLevel}
-                <br>
-                Blockiness:
-                ${p.blockinessRatio}
-                <br>
-                Histogram Range:
-                ${p.histogramRange.range}
-            `;
-
-        }
-
-
-        const aiDetails =
-            report.aiDetection
-                ? `
-                    <br>
-                    <br>
-                    <strong>AI Detection</strong>
-                    <br>
-                    Status:
-                    ${escapeHTML(
-                        report.aiDetection.label
-                    )}
-                    <br>
-                    Model:
-                    ${escapeHTML(
-                        report.aiDetection.model
-                    )}
-                `
-                : "";
-
-
-        details.innerHTML = `
-            <strong>Forensic Information</strong>
-            <br>
-            File:
-            ${escapeHTML(
-                report.fileName
-            )}
-            <br>
-            Type:
-            ${escapeHTML(
-                report.mediaType
-            )}
-            <br>
-            Size:
-            ${formatFileSize(
-                report.fileSize
-            )}
-            <br>
-            Resolution:
-            ${dimensions}
-            <br>
-            Engine:
-            ${escapeHTML(
-                report.engine
-            )}
-
-            ${aiDetails}
-
-            ${pixelDetails}
-
-            <br>
-            <br>
-
-            <span style="opacity:0.65;">
-                ⚠ ${escapeHTML(
-                    report.disclaimer
-                )}
-            </span>
-        `;
-
-    }
-
-
-    /* =========================================================
-       RESET ANALYSIS
-    ========================================================= */
-
-    function resetAnalysis() {
-
-        if (resultEmpty) {
-
-            resultEmpty.style.display =
-                "flex";
-
-        }
-
-
-        if (analysisResult) {
-
-            analysisResult.style.display =
-                "none";
-
-        }
-
-
-        if (
-            aiConfidenceElement
-        ) {
-
-            aiConfidenceElement.textContent =
-                "—";
-
-        }
-
-
-        updateAIModelStatus(
-            "AI MODEL NOT CONNECTED"
-        );
-
-    }
-
-
-    /* =========================================================
-       RESET SELECTION
-    ========================================================= */
-
-    function resetSelection() {
-
-        selectedFile =
-            null;
-
-
-        fileInput.value =
-            "";
-
-
-        if (fileSelected) {
-
-            fileSelected.style.display =
-                "none";
-
-            fileSelected.textContent =
-                "";
-
-        }
-
-
-        if (dropZone) {
-
-            dropZone.classList.remove(
-                "file-selected"
-            );
-
-        }
-
-
-        resetAnalysis();
-
-
-        if (scanButton) {
-
-            scanButton.disabled =
-                true;
-
-            scanButton.style.opacity =
-                "0.6";
-
-            scanButton.style.cursor =
-                "not-allowed";
-
-        }
-
-    }
-
-
-    /* =========================================================
-       BUTTON STATE
-    ========================================================= */
-
-    function setButtonState(
-        text,
-        disabled
-    ) {
-
-        if (!scanButton) {
-
-            return;
-
-        }
-
-
-        scanButton.textContent =
-            text;
-
-
-        scanButton.disabled =
-            disabled;
-
-
-        scanButton.style.opacity =
-            disabled
-                ? "0.7"
-                : "1";
-
-
-        scanButton.style.cursor =
-            disabled
-                ? "wait"
-                : "pointer";
-
-    }
-
-
-    /* =========================================================
-       MESSAGE
-    ========================================================= */
-
-    function showMessage(
-        message,
-        type
-    ) {
-
-        if (
-            type === "error"
-        ) {
-
-            console.error(
-                message
-            );
-
-        }
-
-
-        alert(
-            message
-        );
-
-    }
-
-
-    /* =========================================================
-       MEDIA TYPE
-    ========================================================= */
-
-    function getMediaType(file) {
-
-        if (
-            file.type &&
-            file.type.startsWith(
-                "image/"
-            )
-        ) {
-
-            return "image";
-
-        }
-
-
-        if (
-            file.type &&
-            file.type.startsWith(
-                "video/"
-            )
-        ) {
-
-            return "video";
-
-        }
-
-
-        const extension =
-            getFileExtension(
-                file.name
-            );
-
-
-        const imageExtensions = [
-
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".webp",
-            ".gif"
-
-        ];
-
-
-        if (
-            imageExtensions.includes(
-                extension
-            )
-        ) {
-
-            return "image";
-
-        }
-
-
-        return "video";
-
-    }
-
-
-    /* =========================================================
-       FILE EXTENSION
-    ========================================================= */
-
-    function getFileExtension(
-        filename
-    ) {
-
-        const parts =
-            filename
-                .toLowerCase()
-                .split(".");
-
-
-        if (
-            parts.length < 2
-        ) {
-
-            return "";
-
-        }
-
-
-        return "." +
-            parts.pop();
-
-    }
-
-
-    /* =========================================================
-       FILE SIZE
-    ========================================================= */
-
-    function formatFileSize(
-        bytes
-    ) {
-
-        if (!bytes) {
-
-            return "0 B";
-
-        }
-
-
-        const units = [
-            "B",
-            "KB",
-            "MB",
-            "GB"
-        ];
-
-
-        let size =
-            bytes;
-
-
-        let index =
-            0;
-
-
-        while (
-            size >= 1024 &&
-            index <
-                units.length - 1
-        ) {
-
-            size /=
-                1024;
-
-            index++;
-
-        }
-
-
-        return `${size.toFixed(
-            size >= 10 ||
-            index === 0
-                ? 0
-                : 1
-        )} ${units[index]}`;
-
-    }
-
-
-    /* =========================================================
-       ASPECT RATIO
-    ========================================================= */
-
-    function calculateAspectRatio(
-        width,
-        height
-    ) {
-
-        if (
-            !width ||
-            !height
-        ) {
-
-            return null;
-
-        }
-
-
-        return Number(
-            (
-                width /
-                height
-            ).toFixed(3)
-        );
-
-    }
-
-
-    /* =========================================================
-       ROUND
-    ========================================================= */
-
-    function round(
-        value,
-        decimals = 2
-    ) {
-
-        const factor =
-            Math.pow(
-                10,
-                decimals
-            );
-
-
-        return Math.round(
-            value *
-            factor
-        ) / factor;
-
-    }
-
-
-    /* =========================================================
-       CLAMP
-    ========================================================= */
-
-    function clamp(
-        value,
-        min,
-        max
-    ) {
-
-        return Math.min(
-            Math.max(
-                value,
-                min
-            ),
-            max
-        );
-
-    }
-
-
-    /* =========================================================
-       HTML ESCAPE
-    ========================================================= */
-
-    function escapeHTML(
-        value
-    ) {
-
-        return String(value)
-
-            .replaceAll(
-                "&",
-                "&amp;"
-            )
-
-            .replaceAll(
-                "<",
-                "&lt;"
-            )
-
-            .replaceAll(
-                ">",
-                "&gt;"
-            )
-
-            .replaceAll(
-                '"',
-                "&quot;"
-            )
-
-            .replaceAll(
-                "'",
-                "&#039;"
-            );
-
-    }
-
-
-    /* =========================================================
-       INITIALIZATION
-    ========================================================= */
-
-    resetSelection();
-
-
-    fileInput.setAttribute(
-        "accept",
-        [
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "image/gif",
-            "video/mp4",
-            "video/webm",
-            "video/quicktime",
-            "video/x-msvideo"
-        ].join(",")
-    );
-
+    updateSelectedFileUI(file);
 
     /*
-     * Start AI model initialization.
-     *
-     * It will remain disabled until the
-     * real model is added.
+     * Images can be analyzed by the AI model.
+     * Videos currently use forensic metadata only.
      */
 
-    loadAIModel();
+    if (file.type.startsWith("image/")) {
 
+        loadSelectedImage(file);
 
-    console.log(
-        "DeepShield AI initialized successfully."
+    } else {
+
+        selectedImage = null;
+
+    }
+
+    if (analyzeButton) {
+        analyzeButton.disabled = false;
+    }
+}
+
+/* =========================================================
+   FILE VALIDATION
+   ========================================================= */
+
+function validateFile(file) {
+
+    if (!file) {
+
+        return {
+            valid: false,
+            message: "No file selected."
+        };
+
+    }
+
+    const sizeMB =
+        file.size / (1024 * 1024);
+
+    if (sizeMB > CONFIG.maxFileSizeMB) {
+
+        return {
+            valid: false,
+            message:
+                `File is too large. Maximum size is ${CONFIG.maxFileSizeMB} MB.`
+        };
+
+    }
+
+    const validType =
+        CONFIG.supportedImages.includes(file.type) ||
+        CONFIG.supportedVideos.includes(file.type);
+
+    if (!validType) {
+
+        return {
+            valid: false,
+            message:
+                "Unsupported file type. Please upload JPG, PNG, WEBP, BMP, MP4 or WEBM."
+        };
+
+    }
+
+    return {
+        valid: true
+    };
+}
+
+/* =========================================================
+   SELECTED FILE UI
+   ========================================================= */
+
+function updateSelectedFileUI(file) {
+
+    if (fileNameElement) {
+
+        fileNameElement.textContent =
+            `${file.name} (${formatBytes(file.size)})`;
+
+    }
+
+    /*
+     * Optional common elements.
+     */
+
+    setText("#selectedFile", file.name);
+    setText("#fileSize", formatBytes(file.size));
+    setText("#fileType", file.type || "Unknown");
+}
+
+/* =========================================================
+   IMAGE LOADING
+   ========================================================= */
+
+function loadSelectedImage(file) {
+
+    const reader =
+        new FileReader();
+
+    reader.onload = () => {
+
+        const image =
+            new Image();
+
+        image.onload = () => {
+
+            selectedImage = image;
+
+        };
+
+        image.src =
+            reader.result;
+    };
+
+    reader.readAsDataURL(file);
+}
+
+/* =========================================================
+   MAIN ANALYSIS
+   ========================================================= */
+
+async function analyzeSelectedFile() {
+
+    if (!selectedFile) {
+        return;
+    }
+
+    showLoadingState();
+
+    try {
+
+        /*
+         * -----------------------------------------
+         * 1. DIGITAL FORENSICS
+         * -----------------------------------------
+         */
+
+        forensicResult =
+            await runForensicAnalysis(selectedFile);
+
+        /*
+         * -----------------------------------------
+         * 2. REAL AI DETECTION
+         * -----------------------------------------
+         */
+
+        if (selectedFile.type.startsWith("image/")) {
+
+            aiResult =
+                await runAIDetection(selectedFile);
+
+        } else {
+
+            aiResult = {
+                available: false,
+                confidence: null,
+                label: "Video AI analysis unavailable",
+                model: CONFIG.modelId,
+                message:
+                    "Video frame analysis is not enabled in this version."
+            };
+
+        }
+
+        /*
+         * -----------------------------------------
+         * 3. DISPLAY RESULTS
+         * -----------------------------------------
+         */
+
+        displayResults(
+            selectedFile,
+            forensicResult,
+            aiResult
+        );
+
+    } catch (error) {
+
+        console.error(
+            "DeepShield analysis error:",
+            error
+        );
+
+        showMessage(
+            "Analysis failed. Please try another file."
+        );
+
+        hideLoadingState();
+    }
+}
+
+/* =========================================================
+   REAL AI MODEL
+   ========================================================= */
+
+async function preloadAIModel() {
+
+    try {
+
+        setAIStatus(
+            "Loading AI model..."
+        );
+
+        aiModelLoading = true;
+
+        aiClassifier =
+            await pipeline(
+                "image-classification",
+                CONFIG.modelId,
+                {
+                    device: "wasm"
+                }
+            );
+
+        aiModelReady = true;
+        aiModelLoading = false;
+
+        setAIStatus(
+            "AI model ready"
+        );
+
+        console.log(
+            "DeepShield AI model loaded:",
+            CONFIG.modelId
+        );
+
+    } catch (error) {
+
+        aiModelLoading = false;
+        aiModelReady = false;
+
+        console.error(
+            "Failed to load AI model:",
+            error
+        );
+
+        setAIStatus(
+            "AI model could not be loaded"
+        );
+    }
+}
+
+/* =========================================================
+   AI DETECTION
+   ========================================================= */
+
+async function runAIDetection(file) {
+
+    /*
+     * Make sure the model exists.
+     */
+
+    if (!aiModelReady) {
+
+        if (!aiModelLoading) {
+            await preloadAIModel();
+        }
+
+    }
+
+    if (!aiClassifier) {
+
+        return {
+
+            available: false,
+
+            confidence: null,
+
+            label:
+                "AI Model Unavailable",
+
+            model:
+                CONFIG.modelId,
+
+            message:
+                "The real AI model could not be loaded."
+
+        };
+    }
+
+    try {
+
+        setAIStatus(
+            "Running AI detection..."
+        );
+
+        /*
+         * Transformers.js accepts the image
+         * directly through a Blob URL.
+         */
+
+        const imageURL =
+            URL.createObjectURL(file);
+
+        const output =
+            await aiClassifier(imageURL);
+
+        URL.revokeObjectURL(imageURL);
+
+        console.log(
+            "DeepShield AI raw output:",
+            output
+        );
+
+        if (!output || !output.length) {
+
+            return {
+
+                available: false,
+
+                confidence: null,
+
+                label:
+                    "No AI result",
+
+                model:
+                    CONFIG.modelId,
+
+                message:
+                    "The AI model returned no classification."
+
+            };
+        }
+
+        /*
+         * Sort by confidence.
+         */
+
+        const sorted =
+            [...output].sort(
+                (a, b) =>
+                    Number(b.score) -
+                    Number(a.score)
+            );
+
+        const top =
+            sorted[0];
+
+        const rawLabel =
+            String(
+                top.label || ""
+            ).toLowerCase();
+
+        /*
+         * Model labels may appear as:
+         *
+         * Realism
+         * Deepfake
+         * LABEL_0
+         * LABEL_1
+         */
+
+        let normalizedLabel =
+            normalizeAIClassification(
+                rawLabel
+            );
+
+        const confidence =
+            Math.round(
+                Number(top.score) * 100
+            );
+
+        setAIStatus(
+            "AI analysis complete"
+        );
+
+        return {
+
+            available: true,
+
+            confidence,
+
+            label:
+                normalizedLabel,
+
+            rawLabel:
+                top.label,
+
+            model:
+                CONFIG.modelId,
+
+            allResults:
+                sorted,
+
+            message:
+                "Classification generated by the trained AI model."
+
+        };
+
+    } catch (error) {
+
+        console.error(
+            "AI inference error:",
+            error
+        );
+
+        setAIStatus(
+            "AI inference failed"
+        );
+
+        return {
+
+            available: false,
+
+            confidence: null,
+
+            label:
+                "AI inference failed",
+
+            model:
+                CONFIG.modelId,
+
+            message:
+                error.message ||
+                "The AI model failed during inference."
+
+        };
+    }
+}
+
+/* =========================================================
+   AI LABEL NORMALIZATION
+   ========================================================= */
+
+function normalizeAIClassification(label) {
+
+    const normalized =
+        label.toLowerCase().trim();
+
+    /*
+     * Explicit Deepfake label.
+     */
+
+    if (
+        normalized.includes("deepfake") ||
+        normalized.includes("fake") ||
+        normalized.includes("forged") ||
+        normalized === "1" ||
+        normalized === "label_1"
+    ) {
+
+        return "Deepfake";
+
+    }
+
+    /*
+     * Explicit Realism label.
+     */
+
+    if (
+        normalized.includes("realism") ||
+        normalized.includes("real") ||
+        normalized === "0" ||
+        normalized === "label_0"
+    ) {
+
+        return "Realism";
+
+    }
+
+    return label || "Unknown";
+}
+
+/* =========================================================
+   FORENSIC ANALYSIS
+   ========================================================= */
+
+async function runForensicAnalysis(file) {
+
+    const base =
+        createBaseForensicResult(file);
+
+    if (!file.type.startsWith("image/")) {
+
+        return {
+
+            ...base,
+
+            score: 0,
+
+            risk: "LOW",
+
+            indicators: [],
+
+            metrics: {},
+
+            videoMode: true
+
+        };
+    }
+
+    const image =
+        selectedImage ||
+        await loadImageFromFile(file);
+
+    if (!image) {
+
+        return {
+
+            ...base,
+
+            score: 0,
+
+            risk: "LOW",
+
+            indicators: [],
+
+            metrics: {}
+
+        };
+    }
+
+    /*
+     * Limit canvas dimensions for performance.
+     */
+
+    const MAX_SIZE = 512;
+
+    const scale =
+        Math.min(
+            1,
+            MAX_SIZE /
+            Math.max(
+                image.naturalWidth ||
+                image.width,
+
+                image.naturalHeight ||
+                image.height
+            )
+        );
+
+    const width =
+        Math.max(
+            1,
+            Math.round(
+                (image.naturalWidth ||
+                    image.width) * scale
+            )
+        );
+
+    const height =
+        Math.max(
+            1,
+            Math.round(
+                (image.naturalHeight ||
+                    image.height) * scale
+            )
+        );
+
+    const canvas =
+        document.createElement("canvas");
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx =
+        canvas.getContext("2d", {
+            willReadFrequently: true
+        });
+
+    ctx.drawImage(
+        image,
+        0,
+        0,
+        width,
+        height
     );
 
+    const imageData =
+        ctx.getImageData(
+            0,
+            0,
+            width,
+            height
+        );
 
-    console.log(
-        "Visual Forensics Engine v0.3 ready."
+    const pixels =
+        imageData.data;
+
+    const metrics =
+        calculateImageMetrics(
+            pixels,
+            width,
+            height
+        );
+
+    const indicators =
+        calculateForensicIndicators(
+            file,
+            width,
+            height,
+            metrics
+        );
+
+    const score =
+        calculateForensicScore(
+            indicators
+        );
+
+    const risk =
+        getRiskLevel(score);
+
+    return {
+
+        ...base,
+
+        score,
+
+        risk,
+
+        indicators,
+
+        metrics,
+
+        width,
+
+        height
+
+    };
+}
+
+/* =========================================================
+   BASE FORENSIC DATA
+   ========================================================= */
+
+function createBaseForensicResult(file) {
+
+    return {
+
+        fileName:
+            file.name,
+
+        type:
+            file.type || "unknown",
+
+        size:
+            file.size,
+
+        extension:
+            getFileExtension(
+                file.name
+            ),
+
+        originalSize:
+            file.size
+
+    };
+}
+
+/* =========================================================
+   LOAD IMAGE
+   ========================================================= */
+
+function loadImageFromFile(file) {
+
+    return new Promise((resolve) => {
+
+        const reader =
+            new FileReader();
+
+        reader.onload = () => {
+
+            const image =
+                new Image();
+
+            image.onload = () => {
+                resolve(image);
+            };
+
+            image.onerror = () => {
+                resolve(null);
+            };
+
+            image.src =
+                reader.result;
+        };
+
+        reader.onerror = () => {
+            resolve(null);
+        };
+
+        reader.readAsDataURL(file);
+
+    });
+}
+
+/* =========================================================
+   PIXEL METRICS
+   ========================================================= */
+
+function calculateImageMetrics(
+    pixels,
+    width,
+    height
+) {
+
+    let redSum = 0;
+    let greenSum = 0;
+    let blueSum = 0;
+
+    let luminanceSum = 0;
+    let luminanceSquaredSum = 0;
+
+    let saturationSum = 0;
+
+    let edgeSum = 0;
+    let edgeCount = 0;
+
+    let noiseSum = 0;
+    let noiseCount = 0;
+
+    const histogram =
+        new Array(256).fill(0);
+
+    /*
+     * First pass.
+     */
+
+    for (
+        let i = 0;
+        i < pixels.length;
+        i += 4
+    ) {
+
+        const r =
+            pixels[i];
+
+        const g =
+            pixels[i + 1];
+
+        const b =
+            pixels[i + 2];
+
+        redSum += r;
+        greenSum += g;
+        blueSum += b;
+
+        const luminance =
+            0.2126 * r +
+            0.7152 * g +
+            0.0722 * b;
+
+        luminanceSum +=
+            luminance;
+
+        luminanceSquaredSum +=
+            luminance *
+            luminance;
+
+        const max =
+            Math.max(r, g, b);
+
+        const min =
+            Math.min(r, g, b);
+
+        const saturation =
+            max === 0
+                ? 0
+                : (max - min) / max;
+
+        saturationSum +=
+            saturation;
+
+        histogram[
+            Math.round(
+                luminance
+            )
+        ]++;
+    }
+
+    const pixelCount =
+        pixels.length / 4;
+
+    const redMean =
+        redSum / pixelCount;
+
+    const greenMean =
+        greenSum / pixelCount;
+
+    const blueMean =
+        blueSum / pixelCount;
+
+    const luminanceMean =
+        luminanceSum /
+        pixelCount;
+
+    const luminanceVariance =
+        Math.max(
+            0,
+            luminanceSquaredSum /
+                pixelCount -
+                luminanceMean *
+                luminanceMean
+        );
+
+    const luminanceStd =
+        Math.sqrt(
+            luminanceVariance
+        );
+
+    const saturationMean =
+        saturationSum /
+        pixelCount;
+
+    /*
+     * Edge strength.
+     */
+
+    for (
+        let y = 1;
+        y < height;
+        y++
+    ) {
+
+        for (
+            let x = 1;
+            x < width;
+            x++
+        ) {
+
+            const current =
+                getPixelLuminance(
+                    pixels,
+                    width,
+                    x,
+                    y
+                );
+
+            const left =
+                getPixelLuminance(
+                    pixels,
+                    width,
+                    x - 1,
+                    y
+                );
+
+            const top =
+                getPixelLuminance(
+                    pixels,
+                    width,
+                    x,
+                    y - 1
+                );
+
+            const dx =
+                Math.abs(
+                    current -
+                    left
+                );
+
+            const dy =
+                Math.abs(
+                    current -
+                    top
+                );
+
+            const edge =
+                (dx + dy) / 2;
+
+            edgeSum += edge;
+
+            edgeCount++;
+
+            /*
+             * Simple local noise estimate.
+             */
+
+            const prediction =
+                (
+                    left +
+                    top
+                ) / 2;
+
+            noiseSum +=
+                Math.abs(
+                    current -
+                    prediction
+                );
+
+            noiseCount++;
+        }
+    }
+
+    const edgeStrength =
+        edgeCount
+            ? edgeSum / edgeCount
+            : 0;
+
+    const noiseLevel =
+        noiseCount
+            ? noiseSum / noiseCount
+            : 0;
+
+    /*
+     * Histogram range.
+     */
+
+    let firstBin = 0;
+    let lastBin = 255;
+
+    while (
+        firstBin < 256 &&
+        histogram[firstBin] === 0
+    ) {
+        firstBin++;
+    }
+
+    while (
+        lastBin >= 0 &&
+        histogram[lastBin] === 0
+    ) {
+        lastBin--;
+    }
+
+    const histogramRange =
+        Math.max(
+            0,
+            lastBin -
+            firstBin
+        );
+
+    /*
+     * Entropy.
+     */
+
+    let entropy = 0;
+
+    for (
+        const count of histogram
+    ) {
+
+        if (count === 0) {
+            continue;
+        }
+
+        const probability =
+            count / pixelCount;
+
+        entropy -=
+            probability *
+            Math.log2(
+                probability
+            );
+    }
+
+    /*
+     * Channel deviation.
+     */
+
+    const channelDeviation =
+        (
+            Math.abs(
+                redMean -
+                greenMean
+            ) +
+
+            Math.abs(
+                greenMean -
+                blueMean
+            ) +
+
+            Math.abs(
+                redMean -
+                blueMean
+            )
+        ) / 3;
+
+    /*
+     * Blockiness.
+     */
+
+    const blockiness =
+        calculateBlockiness(
+            pixels,
+            width,
+            height
+        );
+
+    return {
+
+        redMean,
+
+        greenMean,
+
+        blueMean,
+
+        luminanceMean,
+
+        luminanceStd,
+
+        saturationMean,
+
+        edgeStrength,
+
+        noiseLevel,
+
+        entropy,
+
+        histogramRange,
+
+        channelDeviation,
+
+        blockiness
+
+    };
+}
+
+/* =========================================================
+   PIXEL LUMINANCE
+   ========================================================= */
+
+function getPixelLuminance(
+    pixels,
+    width,
+    x,
+    y
+) {
+
+    const index =
+        (
+            y *
+            width +
+            x
+        ) * 4;
+
+    const r =
+        pixels[index];
+
+    const g =
+        pixels[index + 1];
+
+    const b =
+        pixels[index + 2];
+
+    return (
+        0.2126 * r +
+        0.7152 * g +
+        0.0722 * b
+    );
+}
+
+/* =========================================================
+   BLOCKINESS
+   ========================================================= */
+
+function calculateBlockiness(
+    pixels,
+    width,
+    height
+) {
+
+    let boundarySum = 0;
+    let internalSum = 0;
+
+    let boundaryCount = 0;
+    let internalCount = 0;
+
+    for (
+        let y = 1;
+        y < height;
+        y++
+    ) {
+
+        for (
+            let x = 1;
+            x < width;
+            x++
+        ) {
+
+            const current =
+                getPixelLuminance(
+                    pixels,
+                    width,
+                    x,
+                    y
+                );
+
+            const left =
+                getPixelLuminance(
+                    pixels,
+                    width,
+                    x - 1,
+                    y
+                );
+
+            const difference =
+                Math.abs(
+                    current -
+                    left
+                );
+
+            if (
+                x % 8 === 0
+            ) {
+
+                boundarySum +=
+                    difference;
+
+                boundaryCount++;
+
+            } else {
+
+                internalSum +=
+                    difference;
+
+                internalCount++;
+            }
+        }
+    }
+
+    const boundaryAverage =
+        boundaryCount
+            ? boundarySum /
+              boundaryCount
+            : 0;
+
+    const internalAverage =
+        internalCount
+            ? internalSum /
+              internalCount
+            : 0;
+
+    if (
+        internalAverage === 0
+    ) {
+        return 0;
+    }
+
+    return (
+        boundaryAverage /
+        internalAverage
+    );
+}
+
+/* =========================================================
+   FORENSIC INDICATORS
+   ========================================================= */
+
+function calculateForensicIndicators(
+    file,
+    width,
+    height,
+    metrics
+) {
+
+    const aspectRatio =
+        width / height;
+
+    const indicators = [];
+
+    /*
+     * File structure
+     */
+
+    indicators.push({
+        name: "File Structure",
+        status: "Normal",
+        detail:
+            "File successfully decoded by the browser."
+    });
+
+    /*
+     * Resolution
+     */
+
+    indicators.push({
+        name: "Resolution",
+        status:
+            width >= 256 &&
+            height >= 256
+                ? "Valid"
+                : "Low",
+
+        detail:
+            `${width} × ${height}`
+    });
+
+    /*
+     * Aspect ratio
+     */
+
+    indicators.push({
+        name: "Aspect Ratio",
+
+        status:
+            aspectRatio >= 0.5 &&
+            aspectRatio <= 2
+                ? "Normal"
+                : "Unusual",
+
+        detail:
+            aspectRatio.toFixed(3)
+    });
+
+    /*
+     * Edge detail
+     */
+
+    indicators.push({
+        name: "Edge Detail",
+
+        status:
+            metrics.edgeStrength >= 12
+                ? "Strong"
+                : metrics.edgeStrength >= 5
+                    ? "Moderate"
+                    : "Low",
+
+        detail:
+            metrics.edgeStrength.toFixed(3)
+    });
+
+    /*
+     * Noise
+     */
+
+    indicators.push({
+        name: "Noise Profile",
+
+        status:
+            metrics.noiseLevel >= 8
+                ? "High"
+                : metrics.noiseLevel >= 3
+                    ? "Moderate"
+                    : "Low",
+
+        detail:
+            metrics.noiseLevel.toFixed(3)
+    });
+
+    /*
+     * Entropy
+     */
+
+    indicators.push({
+        name: "Image Entropy",
+
+        status:
+            metrics.entropy >= 6
+                ? "High Complexity"
+                : metrics.entropy >= 4
+                    ? "Moderate Complexity"
+                    : "Low Complexity",
+
+        detail:
+            metrics.entropy.toFixed(3)
+    });
+
+    /*
+     * Compression
+     */
+
+    indicators.push({
+        name: "Compression Pattern",
+
+        status:
+            metrics.blockiness >= 1.8
+                ? "High"
+                : metrics.blockiness >= 1.2
+                    ? "Moderate"
+                    : "Low",
+
+        detail:
+            metrics.blockiness.toFixed(2)
+    });
+
+    /*
+     * Color distribution
+     */
+
+    indicators.push({
+        name: "Color Distribution",
+
+        status:
+            metrics.channelDeviation > 35
+                ? "Strong Channel Bias"
+                : metrics.channelDeviation > 15
+                    ? "Moderate Channel Bias"
+                    : "Balanced",
+
+        detail:
+            metrics.channelDeviation.toFixed(2)
+    });
+
+    /*
+     * Histogram
+     */
+
+    indicators.push({
+        name: "Histogram Spread",
+
+        status:
+            metrics.histogramRange >= 180
+                ? "Wide"
+                : metrics.histogramRange >= 100
+                    ? "Moderate"
+                    : "Narrow",
+
+        detail:
+            `${metrics.histogramRange} / 255`
+    });
+
+    /*
+     * Extension
+     */
+
+    indicators.push({
+        name: "File Extension",
+
+        status: "Supported",
+
+        detail:
+            file.name
+    });
+
+    return indicators;
+}
+
+/* =========================================================
+   FORENSIC SCORE
+   ========================================================= */
+
+function calculateForensicScore(
+    indicators
+) {
+
+    let score = 0;
+
+    for (
+        const indicator of indicators
+    ) {
+
+        const status =
+            String(
+                indicator.status
+            ).toLowerCase();
+
+        if (
+            status.includes("high") ||
+            status.includes("unusual")
+        ) {
+
+            score += 2;
+
+        } else if (
+            status.includes("moderate")
+        ) {
+
+            score += 1;
+
+        }
+    }
+
+    /*
+     * Keep the score within 0-100.
+     */
+
+    return Math.min(
+        100,
+        Math.round(
+            score * 7
+        )
+    );
+}
+
+/* =========================================================
+   RISK LEVEL
+   ========================================================= */
+
+function getRiskLevel(score) {
+
+    if (score >= 60) {
+        return "HIGH ANOMALY";
+    }
+
+    if (score >= 30) {
+        return "MEDIUM ANOMALY";
+    }
+
+    return "LOW ANOMALY";
+}
+
+/* =========================================================
+   DISPLAY RESULTS
+   ========================================================= */
+
+function displayResults(
+    file,
+    forensic,
+    ai
+) {
+
+    hideLoadingState();
+
+    /*
+     * AI Confidence
+     */
+
+    if (
+        ai &&
+        ai.available &&
+        typeof ai.confidence === "number"
+    ) {
+
+        setText(
+            "#aiConfidence",
+            `${ai.confidence}%`
+        );
+
+        setText(
+            "#aiStatus",
+            ai.message
+        );
+
+        setText(
+            "#aiModelName",
+            "Deep-Fake-Detector-v2"
+        );
+
+        setText(
+            "#aiClassification",
+            ai.label
+        );
+
+    } else {
+
+        setText(
+            "#aiConfidence",
+            "—"
+        );
+
+        setText(
+            "#aiStatus",
+            ai?.message ||
+            "AI model unavailable."
+        );
+
+        setText(
+            "#aiModelName",
+            "Deep-Fake-Detector-v2"
+        );
+
+        setText(
+            "#aiClassification",
+            "Unavailable"
+        );
+    }
+
+    /*
+     * Forensic score
+     */
+
+    setText(
+        "#score",
+        `${forensic.score}%`
     );
 
-
-    console.log(
-        "AI Detection layer ready for trained model."
+    setText(
+        "#riskLevel",
+        forensic.risk
     );
 
-});
+    /*
+     * Overall assessment
+     */
+
+    const assessment =
+        createOverallAssessment(
+            forensic,
+            ai
+        );
+
+    setText(
+        "#overallAssessment",
+        assessment
+    );
+
+    /*
+     * Individual indicators
+     */
+
+    updateIndicatorElements(
+        forensic.indicators
+    );
+
+    /*
+     * Detailed report
+     */
+
+    renderForensicDetails(
+        file,
+        forensic,
+        ai
+    );
+
+    /*
+     * Show results
+     */
+
+    if (resultSection) {
+
+        resultSection.style.display =
+            "block";
+
+        resultSection.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    }
+}
+
+/* =========================================================
+   OVERALL ASSESSMENT
+   ========================================================= */
+
+function createOverallAssessment(
+    forensic,
+    ai
+) {
+
+    if (
+        ai &&
+        ai.available &&
+        ai.label === "Deepfake"
+    ) {
+
+        return (
+            `AI model classified this media as Deepfake ` +
+            `with ${ai.confidence}% confidence. ` +
+            `Forensic anomaly score: ${forensic.score}%.`
+        );
+    }
+
+    if (
+        ai &&
+        ai.available &&
+        ai.label === "Realism"
+    ) {
+
+        return (
+            `AI model classified this media as Realism ` +
+            `with ${ai.confidence}% confidence. ` +
+            `Forensic anomaly score: ${forensic.score}%.`
+        );
+    }
+
+    return (
+        `AI classification is unavailable. ` +
+        `Current forensic anomaly score: ${forensic.score}%. ` +
+        `This score is heuristic and is not a definitive deepfake verdict.`
+    );
+}
+
+/* =========================================================
+   UPDATE INDICATORS
+   ========================================================= */
+
+function updateIndicatorElements(
+    indicators
+) {
+
+    const mapping = {
+
+        "File Structure":
+            "#indicatorFileStructure",
+
+        "Resolution":
+            "#indicatorResolution",
+
+        "Aspect Ratio":
+            "#indicatorAspect",
+
+        "Edge Detail":
+            "#indicatorEdges",
+
+        "Noise Profile":
+            "#indicatorNoise",
+
+        "Image Entropy":
+            "#indicatorEntropy",
+
+        "Compression Pattern":
+            "#indicatorCompression",
+
+        "Color Distribution":
+            "#indicatorColor",
+
+        "Histogram Spread":
+            "#indicatorHistogram",
+
+        "File Extension":
+            "#indicatorExtension"
+    };
+
+    for (
+        const indicator of indicators
+    ) {
+
+        const selector =
+            mapping[
+                indicator.name
+            ];
+
+        if (!selector) {
+            continue;
+        }
+
+        const element =
+            $(selector);
+
+        if (!element) {
+            continue;
+        }
+
+        element.textContent =
+            `${indicator.status}`;
+    }
+}
+
+/* =========================================================
+   FORENSIC DETAILS
+   ========================================================= */
+
+function renderForensicDetails(
+    file,
+    forensic,
+    ai
+) {
+
+    if (!analysisDetails) {
+        return;
+    }
+
+    const metrics =
+        forensic.metrics || {};
+
+    const aiText =
+        ai &&
+        ai.available
+            ? `${ai.label} (${ai.confidence}%)`
+            : "Unavailable";
+
+    analysisDetails.innerHTML = `
+        <div class="forensic-report">
+
+            <p>
+                <strong>File:</strong>
+                ${escapeHTML(file.name)}
+            </p>
+
+            <p>
+                <strong>Type:</strong>
+                ${escapeHTML(file.type || "Unknown")}
+            </p>
+
+            <p>
+                <strong>Size:</strong>
+                ${formatBytes(file.size)}
+            </p>
+
+            ${
+                forensic.width
+                    ? `
+                        <p>
+                            <strong>Resolution:</strong>
+                            ${forensic.width} × ${forensic.height}
+                        </p>
+                    `
+                    : ""
+            }
+
+            <p>
+                <strong>AI Classification:</strong>
+                ${escapeHTML(aiText)}
+            </p>
+
+            <p>
+                <strong>AI Model:</strong>
+                Deep-Fake-Detector-v2
+            </p>
+
+            ${
+                typeof metrics.luminanceMean === "number"
+                    ? `
+                        <hr>
+
+                        <p>
+                            <strong>Luminance Mean:</strong>
+                            ${metrics.luminanceMean.toFixed(2)}
+                        </p>
+
+                        <p>
+                            <strong>Luminance Std:</strong>
+                            ${metrics.luminanceStd.toFixed(2)}
+                        </p>
+
+                        <p>
+                            <strong>Saturation:</strong>
+                            ${(metrics.saturationMean * 100).toFixed(2)}%
+                        </p>
+
+                        <p>
+                            <strong>Entropy:</strong>
+                            ${metrics.entropy.toFixed(3)}
+                        </p>
+
+                        <p>
+                            <strong>Edge Strength:</strong>
+                            ${metrics.edgeStrength.toFixed(3)}
+                        </p>
+
+                        <p>
+                            <strong>Noise Level:</strong>
+                            ${metrics.noiseLevel.toFixed(3)}
+                        </p>
+
+                        <p>
+                            <strong>Blockiness:</strong>
+                            ${metrics.blockiness.toFixed(2)}
+                        </p>
+
+                        <p>
+                            <strong>Histogram Range:</strong>
+                            ${metrics.histogramRange}
+                        </p>
+                    `
+                    : ""
+            }
+
+        </div>
+
+        <p class="forensic-disclaimer">
+            ⚠ AI prediction is generated by a trained
+            deepfake classification model. Forensic
+            indicators are heuristic signals and should
+            not be treated as definitive proof.
+        </p>
+    `;
+}
+
+/* =========================================================
+   LOADING STATE
+   ========================================================= */
+
+function showLoadingState() {
+
+    if (analyzeButton) {
+
+        analyzeButton.disabled =
+            true;
+
+        analyzeButton.dataset.originalText =
+            analyzeButton.textContent;
+
+        analyzeButton.textContent =
+            "Analyzing...";
+    }
+
+    setAIStatus(
+        aiModelReady
+            ? "Running AI detection..."
+            : "Preparing AI model..."
+    );
+}
+
+function hideLoadingState() {
+
+    if (analyzeButton) {
+
+        analyzeButton.disabled =
+            false;
+
+        analyzeButton.textContent =
+            analyzeButton.dataset.originalText ||
+            "Analyze";
+    }
+}
+
+/* =========================================================
+   AI STATUS
+   ========================================================= */
+
+function setAIStatus(message) {
+
+    setText(
+        "#aiStatus",
+        message
+    );
+}
+
+/* =========================================================
+   UI RESET
+   ========================================================= */
+
+function resetUI() {
+
+    if (analyzeButton) {
+        analyzeButton.disabled = true;
+    }
+
+    setText(
+        "#aiConfidence",
+        "—"
+    );
+
+    setText(
+        "#aiStatus",
+        "Preparing AI model..."
+    );
+
+    setText(
+        "#aiModelName",
+        "Deep-Fake-Detector-v2"
+    );
+
+    setText(
+        "#aiClassification",
+        "Waiting for analysis"
+    );
+
+    setText(
+        "#score",
+        "—"
+    );
+
+    setText(
+        "#riskLevel",
+        "WAITING"
+    );
+
+    setText(
+        "#overallAssessment",
+        "Upload an image to begin analysis."
+    );
+
+    if (resultSection) {
+        resultSection.style.display = "none";
+    }
+}
+
+/* =========================================================
+   MESSAGE
+   ========================================================= */
+
+function showMessage(message) {
+
+    console.warn(
+        "DeepShield:",
+        message
+    );
+
+    const messageElement =
+        $("#message") ||
+        $("#statusMessage") ||
+        $("#uploadMessage");
+
+    if (messageElement) {
+
+        messageElement.textContent =
+            message;
+
+        messageElement.style.display =
+            "block";
+    }
+}
+
+function clearMessage() {
+
+    const messageElement =
+        $("#message") ||
+        $("#statusMessage") ||
+        $("#uploadMessage");
+
+    if (messageElement) {
+
+        messageElement.textContent =
+            "";
+
+        messageElement.style.display =
+            "none";
+    }
+}
+
+/* =========================================================
+   FORMATTING
+   ========================================================= */
+
+function formatBytes(bytes) {
+
+    if (!Number.isFinite(bytes)) {
+        return "Unknown";
+    }
+
+    if (bytes === 0) {
+        return "0 Bytes";
+    }
+
+    const units = [
+        "Bytes",
+        "KB",
+        "MB",
+        "GB"
+    ];
+
+    const index =
+        Math.floor(
+            Math.log(bytes) /
+            Math.log(1024)
+        );
+
+    return (
+        parseFloat(
+            (
+                bytes /
+                Math.pow(
+                    1024,
+                    index
+                )
+            ).toFixed(2)
+        ) +
+        " " +
+        units[index]
+    );
+}
+
+function getFileExtension(
+    filename
+) {
+
+    if (!filename.includes(".")) {
+        return "";
+    }
+
+    return filename
+        .split(".")
+        .pop()
+        .toLowerCase();
+}
+
+/* =========================================================
+   HTML ESCAPE
+   ========================================================= */
+
+function escapeHTML(value) {
+
+    return String(value)
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
+
+/* =========================================================
+   GLOBAL DEBUG API
+   ========================================================= */
+
+window.DeepShield = {
+
+    getAIStatus: () => ({
+        model:
+            CONFIG.modelId,
+
+        loading:
+            aiModelLoading,
+
+        ready:
+            aiModelReady
+    }),
+
+    getSelectedFile: () =>
+        selectedFile,
+
+    getForensicResult: () =>
+        forensicResult,
+
+    getAIResult: () =>
+        aiResult
+};
+
+console.log(
+    "DeepShield AI v0.4 initialized."
+);
