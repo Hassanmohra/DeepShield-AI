@@ -4,7 +4,7 @@
  * DeepShield AI
  * Client-side Media Forensics Engine
  *
- * Version: 0.2
+ * Version: 0.3
  *
  * Features:
  * - Image / video upload
@@ -19,10 +19,15 @@
  * - Noise estimation
  * - Compression / blockiness estimation
  * - Deterministic forensic anomaly score
+ * - AI Detection layer preparation
+ * - ONNX model readiness detection
  *
  * IMPORTANT:
- * This is a heuristic forensic analyzer.
- * It is NOT a trained Deep Learning deepfake detector.
+ * The forensic score is heuristic.
+ * It is NOT a trained deepfake probability.
+ *
+ * AI Detection Confidence remains unavailable
+ * until a real trained AI model is connected.
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -52,6 +57,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const scoreElement =
         document.getElementById("score");
 
+    const aiConfidenceElement =
+        document.getElementById("aiConfidence");
+
+    const riskElement =
+        document.getElementById("riskLevel") ||
+        document.querySelector(".risk");
+
+    const overallAssessmentElement =
+        document.getElementById("overallAssessment");
+
+    const aiModelStatusElement =
+        document.getElementById("aiModelStatus");
 
     const chooseMediaButton =
         document.getElementById("chooseMedia") ||
@@ -112,19 +129,29 @@ document.addEventListener("DOMContentLoaded", () => {
             ".avi"
         ],
 
+        analysisMaxDimension:
+            420,
+
+        maxAnalysisPixels:
+            170000,
+
         /*
-         * Images are resized for analysis.
-         * This keeps browser processing fast.
+         * Future AI model.
+         *
+         * When we add the real ONNX model,
+         * this path will be used.
          */
 
-        analysisMaxDimension: 420,
+        aiModelPath:
+            "models/deepfake-detector.onnx",
 
         /*
-         * Number of pixels used in detailed
-         * calculations.
+         * Disabled until a real trained model
+         * is actually available.
          */
 
-        maxAnalysisPixels: 170000
+        aiModelEnabled:
+            false
 
     };
 
@@ -133,9 +160,17 @@ document.addEventListener("DOMContentLoaded", () => {
        STATE
     ========================================================= */
 
-    let selectedFile = null;
+    let selectedFile =
+        null;
 
-    let analysisInProgress = false;
+    let analysisInProgress =
+        false;
+
+    let aiModel =
+        null;
+
+    let aiModelAvailable =
+        false;
 
 
     /* =========================================================
@@ -147,11 +182,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (event) {
 
             event.preventDefault();
-
             event.stopPropagation();
 
         }
-
 
         if (
             fileInput &&
@@ -604,11 +637,6 @@ document.addEventListener("DOMContentLoaded", () => {
             null;
 
 
-        /*
-         * Real pixel analysis is currently
-         * performed for images.
-         */
-
         if (
             getMediaType(file) === "image"
         ) {
@@ -629,12 +657,34 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-        const score =
+        const forensicScore =
             calculateForensicScore(
                 file,
                 metadata,
                 pixelAnalysis,
                 indicators
+            );
+
+
+        /*
+         * AI analysis.
+         *
+         * At this stage this returns
+         * "not available" instead of inventing
+         * a fake confidence value.
+         */
+
+        const aiResult =
+            await runAIDetection(
+                file,
+                pixelAnalysis
+            );
+
+
+        const overall =
+            calculateOverallAssessment(
+                forensicScore,
+                aiResult
             );
 
 
@@ -658,19 +708,374 @@ document.addEventListener("DOMContentLoaded", () => {
 
             indicators,
 
-            score,
+            score:
+                forensicScore,
 
             risk:
-                getRiskLevel(score),
+                getRiskLevel(
+                    forensicScore
+                ),
+
+            aiDetection:
+                aiResult,
+
+            overallAssessment:
+                overall,
 
             generatedAt:
                 new Date().toISOString(),
 
             engine:
-                "DeepShield Visual Forensics v0.2",
+                "DeepShield Visual Forensics v0.3",
 
             disclaimer:
-                "Heuristic forensic analysis. Not a definitive deepfake verdict."
+                "Heuristic forensic analysis. AI confidence is unavailable until a trained detection model is connected."
+
+        };
+
+    }
+
+
+    /* =========================================================
+       AI DETECTION ENGINE
+       ========================================================= */
+
+    async function runAIDetection(
+        file,
+        pixelAnalysis
+    ) {
+
+        /*
+         * IMPORTANT:
+         *
+         * We do NOT generate a fake AI percentage.
+         *
+         * The current project does not contain
+         * a trained deepfake model yet.
+         */
+
+
+        if (
+            !CONFIG.aiModelEnabled
+        ) {
+
+            return {
+
+                available:
+                    false,
+
+                confidence:
+                    null,
+
+                label:
+                    "AI Model Not Connected",
+
+                model:
+                    "Not loaded",
+
+                message:
+                    "A trained AI deepfake detection model has not been connected yet."
+
+            };
+
+        }
+
+
+        /*
+         * Future ONNX implementation.
+         *
+         * The actual model will be loaded here.
+         */
+
+        if (!aiModelAvailable) {
+
+            return {
+
+                available:
+                    false,
+
+                confidence:
+                    null,
+
+                label:
+                    "AI Model Unavailable",
+
+                model:
+                    CONFIG.aiModelPath,
+
+                message:
+                    "The configured AI model could not be loaded."
+
+            };
+
+        }
+
+
+        /*
+         * Placeholder for real model inference.
+         *
+         * This section will be replaced when
+         * the trained model is added.
+         */
+
+        return {
+
+            available:
+                false,
+
+            confidence:
+                null,
+
+            label:
+                "AI Inference Pending",
+
+            model:
+                CONFIG.aiModelPath,
+
+            message:
+                "AI inference is not available yet."
+
+        };
+
+    }
+
+
+    /* =========================================================
+       FUTURE AI MODEL LOADER
+       ========================================================= */
+
+    async function loadAIModel() {
+
+        /*
+         * The ONNX Runtime Web library will be
+         * connected here in the next stage.
+         *
+         * Example future workflow:
+         *
+         * ort.InferenceSession.create(
+         *     CONFIG.aiModelPath
+         * )
+         *
+         * We intentionally do not execute it
+         * before the actual model is present.
+         */
+
+
+        if (
+            !CONFIG.aiModelEnabled
+        ) {
+
+            updateAIModelStatus(
+                "AI MODEL NOT CONNECTED"
+            );
+
+            return false;
+
+        }
+
+
+        try {
+
+            /*
+             * Future implementation.
+             */
+
+            aiModel =
+                null;
+
+            aiModelAvailable =
+                false;
+
+
+            updateAIModelStatus(
+                "AI MODEL UNAVAILABLE"
+            );
+
+
+            return false;
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "DeepShield AI model loading error:",
+                error
+            );
+
+
+            aiModel =
+                null;
+
+            aiModelAvailable =
+                false;
+
+
+            updateAIModelStatus(
+                "AI MODEL ERROR"
+            );
+
+
+            return false;
+
+        }
+
+    }
+
+
+    /* =========================================================
+       AI MODEL STATUS
+    ========================================================= */
+
+    function updateAIModelStatus(
+        status
+    ) {
+
+        if (
+            aiModelStatusElement
+        ) {
+
+            aiModelStatusElement.textContent =
+                status;
+
+        }
+
+    }
+
+
+    /* =========================================================
+       OVERALL ASSESSMENT
+    ========================================================= */
+
+    function calculateOverallAssessment(
+        forensicScore,
+        aiResult
+    ) {
+
+        /*
+         * If AI is unavailable,
+         * assessment is based ONLY on
+         * forensic anomaly analysis.
+         */
+
+        if (
+            !aiResult.available
+        ) {
+
+            if (
+                forensicScore >= 70
+            ) {
+
+                return {
+                    title:
+                        "HIGH FORENSIC ANOMALY",
+
+                    description:
+                        "Multiple forensic signals require further investigation.",
+
+                    level:
+                        "high"
+
+                };
+
+            }
+
+
+            if (
+                forensicScore >= 40
+            ) {
+
+                return {
+                    title:
+                        "MODERATE FORENSIC ANOMALY",
+
+                    description:
+                        "Some forensic signals were detected and should be reviewed.",
+
+                    level:
+                        "medium"
+
+                };
+
+            }
+
+
+            return {
+
+                title:
+                    "LOW FORENSIC ANOMALY",
+
+                description:
+                    "No strong forensic anomaly signals were detected.",
+
+                level:
+                    "low"
+
+            };
+
+        }
+
+
+        /*
+         * Future combined AI + forensic logic.
+         */
+
+        const confidence =
+            aiResult.confidence;
+
+
+        if (
+            confidence >= 80 &&
+            forensicScore >= 50
+        ) {
+
+            return {
+
+                title:
+                    "HIGH MANIPULATION RISK",
+
+                description:
+                    "AI detection and forensic analysis both indicate possible manipulation.",
+
+                level:
+                    "high"
+
+            };
+
+        }
+
+
+        if (
+            confidence >= 60 ||
+            forensicScore >= 50
+        ) {
+
+            return {
+
+                title:
+                    "POSSIBLE MANIPULATION",
+
+                description:
+                    "One or more analysis systems detected signals requiring review.",
+
+                level:
+                    "medium"
+
+            };
+
+        }
+
+
+        return {
+
+            title:
+                "LOW MANIPULATION RISK",
+
+            description:
+                "The available analysis systems detected no strong manipulation signals.",
+
+            level:
+                "low"
 
         };
 
@@ -688,10 +1093,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const mediaType =
                 getMediaType(file);
 
-
-            /* -------------------------
-               IMAGE
-            ------------------------- */
 
             if (
                 mediaType === "image"
@@ -766,10 +1167,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             }
 
-
-            /* -------------------------
-               VIDEO
-            ------------------------- */
 
             if (
                 mediaType === "video"
@@ -896,11 +1293,6 @@ document.addEventListener("DOMContentLoaded", () => {
                             image.naturalHeight;
 
 
-                        /*
-                         * Resize image while keeping
-                         * aspect ratio.
-                         */
-
                         let width =
                             originalWidth;
 
@@ -950,11 +1342,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
 
 
-                        /*
-                         * Prevent extremely large
-                         * canvas processing.
-                         */
-
                         let pixelCount =
                             width *
                             height;
@@ -1002,7 +1389,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         canvas.width =
                             width;
-
 
                         canvas.height =
                             height;
@@ -1121,10 +1507,6 @@ document.addEventListener("DOMContentLoaded", () => {
             height;
 
 
-        /*
-         * Grayscale histogram.
-         */
-
         const histogram =
             new Array(256).fill(0);
 
@@ -1139,10 +1521,6 @@ document.addEventListener("DOMContentLoaded", () => {
         let sumS = 0;
         let sumS2 = 0;
 
-
-        /*
-         * First pass.
-         */
 
         for (
             let i = 0;
@@ -1288,11 +1666,8 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-        /*
-         * Histogram entropy.
-         */
-
-        let entropy = 0;
+        let entropy =
+            0;
 
 
         for (
@@ -1322,11 +1697,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        /*
-         * Second pass:
-         * edge / texture / noise / blockiness.
-         */
-
         let edgeSum = 0;
 
         let edgeSamples = 0;
@@ -1343,10 +1713,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let blockInteriorSamples = 0;
 
-
-        /*
-         * Helper for grayscale.
-         */
 
         function getGray(x, y) {
 
@@ -1367,10 +1733,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
-
-        /*
-         * Sample every few pixels for speed.
-         */
 
         const step =
             Math.max(
@@ -1431,10 +1793,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     );
 
 
-                /*
-                 * Local gradient.
-                 */
-
                 const gradient =
                     (
                         Math.abs(
@@ -1451,14 +1809,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 edgeSum +=
                     gradient;
 
-
                 edgeSamples++;
 
-
-                /*
-                 * High-frequency residual:
-                 * compares pixel to neighborhood average.
-                 */
 
                 const neighborAverage =
                     (
@@ -1479,14 +1831,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 noiseSum +=
                     residual;
 
-
                 noiseSamples++;
 
-
-                /*
-                 * JPEG-like 8x8 block boundary
-                 * estimation.
-                 */
 
                 if (
                     x % 8 === 0
@@ -1553,10 +1899,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 : 1;
 
 
-        /*
-         * Channel balance.
-         */
-
         const channelMean =
             (
                 meanR +
@@ -1615,19 +1957,34 @@ document.addEventListener("DOMContentLoaded", () => {
                 ),
 
             entropy:
-                round(entropy, 3),
+                round(
+                    entropy,
+                    3
+                ),
 
             edgeStrength:
-                round(edgeStrength, 3),
+                round(
+                    edgeStrength,
+                    3
+                ),
 
             noiseLevel:
-                round(noiseLevel, 3),
+                round(
+                    noiseLevel,
+                    3
+                ),
 
             blockinessRatio:
-                round(blockinessRatio, 3),
+                round(
+                    blockinessRatio,
+                    3
+                ),
 
             channelDeviation:
-                round(channelDeviation, 3),
+                round(
+                    channelDeviation,
+                    3
+                ),
 
             histogramRange:
                 calculateHistogramRange(
@@ -1657,10 +2014,8 @@ document.addEventListener("DOMContentLoaded", () => {
         let low =
             0;
 
-
         let high =
             255;
-
 
         let accumulated =
             0;
@@ -1681,7 +2036,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 threshold
             ) {
 
-                low = i;
+                low =
+                    i;
 
                 break;
 
@@ -1709,7 +2065,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 threshold
             ) {
 
-                high = i;
+                high =
+                    i;
 
                 break;
 
@@ -1745,10 +2102,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const indicators = [];
 
 
-        /*
-         * File structure
-         */
-
         indicators.push({
 
             name:
@@ -1766,10 +2119,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         });
 
-
-        /*
-         * Resolution
-         */
 
         if (
             metadata.width &&
@@ -1801,10 +2150,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        /*
-         * Aspect ratio
-         */
-
         if (
             metadata.aspectRatio
         ) {
@@ -1834,15 +2179,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        /*
-         * Actual pixel analysis
-         */
-
         if (pixels) {
-
-            /*
-             * Sharpness
-             */
 
             indicators.push({
 
@@ -1862,10 +2199,6 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
 
-            /*
-             * Noise
-             */
-
             indicators.push({
 
                 name:
@@ -1883,10 +2216,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             });
 
-
-            /*
-             * Entropy
-             */
 
             indicators.push({
 
@@ -1906,10 +2235,6 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
 
-            /*
-             * Compression
-             */
-
             indicators.push({
 
                 name:
@@ -1927,10 +2252,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             });
 
-
-            /*
-             * Color
-             */
 
             indicators.push({
 
@@ -1950,10 +2271,6 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
 
-            /*
-             * Histogram
-             */
-
             indicators.push({
 
                 name:
@@ -1971,10 +2288,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
-
-        /*
-         * File extension
-         */
 
         const extension =
             getFileExtension(
@@ -2011,7 +2324,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /* =========================================================
        FORENSIC SCORE
-       ========================================================= */
+    ========================================================= */
 
     function calculateForensicScore(
         file,
@@ -2021,17 +2334,11 @@ document.addEventListener("DOMContentLoaded", () => {
     ) {
 
         /*
-         * IMPORTANT:
-         * This score represents anomaly signals,
-         * NOT deepfake probability.
+         * This is an anomaly score.
+         * It is NOT AI deepfake probability.
          */
 
         if (!pixels) {
-
-            /*
-             * Videos currently receive a
-             * metadata-based score.
-             */
 
             let videoScore =
                 10;
@@ -2042,7 +2349,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 metadata.duration < 1
             ) {
 
-                videoScore += 10;
+                videoScore +=
+                    10;
 
             }
 
@@ -2056,135 +2364,112 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        let score = 5;
+        let score =
+            5;
 
-
-        /*
-         * Very low entropy can indicate
-         * overly smooth / simplified imagery.
-         */
 
         if (
             pixels.entropy < 3.5
         ) {
 
-            score += 10;
+            score +=
+                10;
 
         }
         else if (
             pixels.entropy < 4.5
         ) {
 
-            score += 4;
+            score +=
+                4;
 
         }
 
-
-        /*
-         * Very high or very low noise.
-         */
 
         if (
             pixels.noiseLevel < 0.8
         ) {
 
-            score += 8;
+            score +=
+                8;
 
         }
         else if (
             pixels.noiseLevel > 15
         ) {
 
-            score += 7;
+            score +=
+                7;
 
         }
 
-
-        /*
-         * Extremely weak edge structure.
-         */
 
         if (
             pixels.edgeStrength < 2
         ) {
 
-            score += 8;
+            score +=
+                8;
 
         }
 
-
-        /*
-         * Strong block boundary pattern.
-         */
 
         if (
             pixels.blockinessRatio > 1.35
         ) {
 
-            score += 12;
+            score +=
+                12;
 
         }
         else if (
             pixels.blockinessRatio > 1.18
         ) {
 
-            score += 5;
+            score +=
+                5;
 
         }
 
-
-        /*
-         * Very narrow histogram.
-         */
 
         if (
             pixels.histogramRange.range < 60
         ) {
 
-            score += 8;
+            score +=
+                8;
 
         }
         else if (
             pixels.histogramRange.range < 100
         ) {
 
-            score += 3;
+            score +=
+                3;
 
         }
 
-
-        /*
-         * Unusual color-channel imbalance.
-         */
 
         if (
             pixels.channelDeviation > 35
         ) {
 
-            score += 7;
+            score +=
+                7;
 
         }
 
-
-        /*
-         * Very high saturation uniformity.
-         */
 
         if (
             pixels.saturationStd < 4 &&
             pixels.saturationMean > 60
         ) {
 
-            score += 5;
+            score +=
+                5;
 
         }
 
-
-        /*
-         * Large images are not automatically
-         * suspicious. Only use file-size ratio
-         * as a weak signal.
-         */
 
         if (
             metadata.width &&
@@ -2203,17 +2488,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 file.size < 100000
             ) {
 
-                score += 4;
+                score +=
+                    4;
 
             }
 
         }
 
-
-        /*
-         * Add only a small contribution
-         * from generic indicators.
-         */
 
         const mediumIndicators =
             indicators.filter(
@@ -2239,33 +2520,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =========================================================
-       CLASSIFICATION FUNCTIONS
+       CLASSIFICATION
     ========================================================= */
 
     function classifyEdgeStrength(value) {
 
         if (value < 2) {
-
             return "Very Low";
-
         }
 
         if (value < 5) {
-
             return "Low";
-
         }
 
         if (value < 12) {
-
             return "Normal";
-
         }
 
         if (value < 25) {
-
             return "High";
-
         }
 
         return "Very High";
@@ -2276,14 +2549,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function edgeSeverity(value) {
 
         if (
-            value < 2
-        ) {
-
-            return "medium";
-
-        }
-
-        if (
+            value < 2 ||
             value > 40
         ) {
 
@@ -2299,27 +2565,19 @@ document.addEventListener("DOMContentLoaded", () => {
     function classifyNoise(value) {
 
         if (value < 0.8) {
-
             return "Very Low";
-
         }
 
         if (value < 2.5) {
-
             return "Low";
-
         }
 
         if (value < 7) {
-
             return "Normal";
-
         }
 
         if (value < 15) {
-
             return "High";
-
         }
 
         return "Very High";
@@ -2346,21 +2604,15 @@ document.addEventListener("DOMContentLoaded", () => {
     function classifyEntropy(value) {
 
         if (value < 3.5) {
-
             return "Low Complexity";
-
         }
 
         if (value < 5) {
-
             return "Moderate";
-
         }
 
         if (value < 7) {
-
             return "High Complexity";
-
         }
 
         return "Very High";
@@ -2370,12 +2622,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function entropySeverity(value) {
 
-        if (
-            value < 3.5
-        ) {
-
+        if (value < 3.5) {
             return "medium";
-
         }
 
         return "low";
@@ -2386,21 +2634,15 @@ document.addEventListener("DOMContentLoaded", () => {
     function classifyBlockiness(value) {
 
         if (value < 1.08) {
-
             return "Low";
-
         }
 
         if (value < 1.18) {
-
             return "Normal";
-
         }
 
         if (value < 1.35) {
-
             return "Elevated";
-
         }
 
         return "Strong";
@@ -2410,12 +2652,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function blockinessSeverity(value) {
 
-        if (
-            value > 1.35
-        ) {
-
+        if (value > 1.35) {
             return "medium";
-
         }
 
         return "low";
@@ -2423,7 +2661,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    function classifyColorDistribution(pixels) {
+    function classifyColorDistribution(
+        pixels
+    ) {
 
         if (
             pixels.channelDeviation > 35
@@ -2433,6 +2673,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
+
         if (
             pixels.saturationMean > 75
         ) {
@@ -2440,6 +2681,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return "Highly Saturated";
 
         }
+
 
         if (
             pixels.saturationMean < 8
@@ -2449,12 +2691,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
+
         return "Balanced";
 
     }
 
 
-    function colorSeverity(pixels) {
+    function colorSeverity(
+        pixels
+    ) {
 
         if (
             pixels.channelDeviation > 35
@@ -2471,7 +2716,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /* =========================================================
        RISK LEVEL
-       ========================================================= */
+    ========================================================= */
 
     function getRiskLevel(score) {
 
@@ -2502,7 +2747,9 @@ document.addEventListener("DOMContentLoaded", () => {
        DISPLAY RESULT
     ========================================================= */
 
-    function displayAnalysisResult(report) {
+    function displayAnalysisResult(
+        report
+    ) {
 
         if (
             !resultEmpty ||
@@ -2522,7 +2769,13 @@ document.addEventListener("DOMContentLoaded", () => {
             "block";
 
 
-        if (scoreElement) {
+        /*
+         * Forensic Score
+         */
+
+        if (
+            scoreElement
+        ) {
 
             scoreElement.textContent =
                 `${report.score}%`;
@@ -2530,15 +2783,67 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
+        /*
+         * AI Detection Confidence
+         *
+         * IMPORTANT:
+         * It stays "—" until the real model
+         * is connected.
+         */
+
+        if (
+            aiConfidenceElement
+        ) {
+
+            if (
+                report.aiDetection &&
+                report.aiDetection.available
+            ) {
+
+                aiConfidenceElement.textContent =
+                    `${report.aiDetection.confidence}%`;
+
+            }
+            else {
+
+                aiConfidenceElement.textContent =
+                    "—";
+
+            }
+
+        }
+
+
+        /*
+         * Risk
+         */
+
         updateRiskLabel(
             report.risk
         );
 
 
+        /*
+         * Overall Assessment
+         */
+
+        updateOverallAssessment(
+            report
+        );
+
+
+        /*
+         * Indicators
+         */
+
         updateIndicators(
             report.indicators
         );
 
+
+        /*
+         * Details
+         */
 
         updateAnalysisDetails(
             report
@@ -2551,23 +2856,114 @@ document.addEventListener("DOMContentLoaded", () => {
        RISK LABEL
     ========================================================= */
 
-    function updateRiskLabel(risk) {
+    function updateRiskLabel(
+        risk
+    ) {
 
-        const riskElement =
+        const element =
+            riskElement ||
             analysisResult.querySelector(
                 ".risk"
             );
 
 
-        if (!riskElement) {
+        if (!element) {
 
             return;
 
         }
 
 
-        riskElement.textContent =
+        element.textContent =
             `${risk} ANOMALY`;
+
+    }
+
+
+    /* =========================================================
+       OVERALL ASSESSMENT UI
+    ========================================================= */
+
+    function updateOverallAssessment(
+        report
+    ) {
+
+        if (
+            overallAssessmentElement
+        ) {
+
+            overallAssessmentElement.innerHTML = `
+                <strong>
+                    ${escapeHTML(
+                        report.overallAssessment.title
+                    )}
+                </strong>
+                <br>
+                <span style="opacity:0.7;">
+                    ${escapeHTML(
+                        report.overallAssessment.description
+                    )}
+                </span>
+            `;
+
+            return;
+
+        }
+
+
+        /*
+         * If the new HTML element does not exist,
+         * create one automatically.
+         */
+
+        const assessment =
+            document.createElement(
+                "div"
+            );
+
+
+        assessment.id =
+            "overallAssessment";
+
+
+        assessment.style.marginTop =
+            "16px";
+
+
+        assessment.style.padding =
+            "14px";
+
+
+        assessment.style.borderRadius =
+            "12px";
+
+
+        assessment.style.background =
+            "rgba(255,255,255,0.025)";
+
+
+        assessment.style.border =
+            "1px solid rgba(255,255,255,0.06)";
+
+
+        assessment.innerHTML = `
+            <strong>
+                ${escapeHTML(
+                    report.overallAssessment.title
+                )}
+            </strong>
+            <br>
+            <span style="opacity:0.7;">
+                ${escapeHTML(
+                    report.overallAssessment.description
+                )}
+            </span>
+        `;
+
+
+        analysisResult.appendChild(
+            assessment
+        );
 
     }
 
@@ -2722,7 +3118,9 @@ document.addEventListener("DOMContentLoaded", () => {
             "";
 
 
-        if (report.pixelAnalysis) {
+        if (
+            report.pixelAnalysis
+        ) {
 
             const p =
                 report.pixelAnalysis;
@@ -2761,28 +3159,63 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
+        const aiDetails =
+            report.aiDetection
+                ? `
+                    <br>
+                    <br>
+                    <strong>AI Detection</strong>
+                    <br>
+                    Status:
+                    ${escapeHTML(
+                        report.aiDetection.label
+                    )}
+                    <br>
+                    Model:
+                    ${escapeHTML(
+                        report.aiDetection.model
+                    )}
+                `
+                : "";
+
+
         details.innerHTML = `
             <strong>Forensic Information</strong>
             <br>
             File:
-            ${escapeHTML(report.fileName)}
+            ${escapeHTML(
+                report.fileName
+            )}
             <br>
             Type:
-            ${escapeHTML(report.mediaType)}
+            ${escapeHTML(
+                report.mediaType
+            )}
             <br>
             Size:
-            ${formatFileSize(report.fileSize)}
+            ${formatFileSize(
+                report.fileSize
+            )}
             <br>
             Resolution:
             ${dimensions}
             <br>
             Engine:
-            ${escapeHTML(report.engine)}
+            ${escapeHTML(
+                report.engine
+            )}
+
+            ${aiDetails}
+
             ${pixelDetails}
+
             <br>
             <br>
+
             <span style="opacity:0.65;">
-                ⚠ ${escapeHTML(report.disclaimer)}
+                ⚠ ${escapeHTML(
+                    report.disclaimer
+                )}
             </span>
         `;
 
@@ -2809,6 +3242,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 "none";
 
         }
+
+
+        if (
+            aiConfidenceElement
+        ) {
+
+            aiConfidenceElement.textContent =
+                "—";
+
+        }
+
+
+        updateAIModelStatus(
+            "AI MODEL NOT CONNECTED"
+        );
 
     }
 
@@ -3212,13 +3660,28 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
+    /*
+     * Start AI model initialization.
+     *
+     * It will remain disabled until the
+     * real model is added.
+     */
+
+    loadAIModel();
+
+
     console.log(
         "DeepShield AI initialized successfully."
     );
 
 
     console.log(
-        "Visual Forensics Engine v0.2 ready."
+        "Visual Forensics Engine v0.3 ready."
+    );
+
+
+    console.log(
+        "AI Detection layer ready for trained model."
     );
 
 });
