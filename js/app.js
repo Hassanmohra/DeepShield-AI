@@ -1,18 +1,10 @@
 /* =========================================================
    DeepShield AI
-   app.js v0.7
-   Stable Upload + Drag & Drop + Forensics + AI
-   ========================================================= */
-
-"use strict";
-
-
-/* =========================================================
-   CONFIG
+   app.js — v0.8
+   AI Deepfake Detection + Browser Forensics
    ========================================================= */
 
 const CONFIG = {
-
     MAX_FILE_SIZE: 200 * 1024 * 1024,
 
     IMAGE_TYPES: [
@@ -29,9 +21,7 @@ const CONFIG = {
         "video/x-msvideo"
     ],
 
-    MODEL_ID:
-        "onnx-community/Deep-Fake-Detector-v2-Model-ONNX"
-
+    MODEL_ID: "onnx-community/Deep-Fake-Detector-v2-Model-ONNX"
 };
 
 
@@ -39,1088 +29,590 @@ const CONFIG = {
    DOM
    ========================================================= */
 
-const fileInput =
-    document.getElementById("fileInput");
+const fileInput = document.getElementById("fileInput");
+const dropZone = document.getElementById("dropZone");
+const fileSelected = document.getElementById("fileSelected");
+const scanButton = document.getElementById("scanButton");
 
-const dropZone =
-    document.getElementById("dropZone");
+const resultEmpty = document.getElementById("resultEmpty");
+const analysisResult = document.getElementById("analysisResult");
 
-const fileSelected =
-    document.getElementById("fileSelected");
+const aiConfidence = document.getElementById("aiConfidence");
+const scoreElement = document.getElementById("score");
+const riskLevel = document.getElementById("riskLevel");
 
-const scanButton =
-    document.getElementById("scanButton");
+const aiClassification = document.getElementById("aiClassification");
+const deepfakeProbability = document.getElementById("deepfakeProbability");
+const realismProbability = document.getElementById("realismProbability");
 
-const resultEmpty =
-    document.getElementById("resultEmpty");
+const modelStatus = document.getElementById("modelStatus");
 
-const analysisResult =
-    document.getElementById("analysisResult");
+const analysisProgress = document.getElementById("analysisProgress");
+const progressLoad = document.getElementById("progressLoad");
+const progressAI = document.getElementById("progressAI");
+const progressForensics = document.getElementById("progressForensics");
+const progressReport = document.getElementById("progressReport");
 
-const aiConfidence =
-    document.getElementById("aiConfidence");
-
-const scoreElement =
-    document.getElementById("score");
-
-const riskLevel =
-    document.getElementById("riskLevel");
-
-const forensicDetails =
-    document.getElementById("forensicDetails");
+const forensicDetails = document.getElementById("forensicDetails");
 
 
 /* =========================================================
-   STATE
+   Indicators
+   ========================================================= */
+
+const indicators = {
+    fileStructure: document.getElementById("indicatorFileStructure"),
+    resolution: document.getElementById("indicatorResolution"),
+    aspect: document.getElementById("indicatorAspect"),
+    edges: document.getElementById("indicatorEdges"),
+    noise: document.getElementById("indicatorNoise"),
+    entropy: document.getElementById("indicatorEntropy"),
+    compression: document.getElementById("indicatorCompression"),
+    color: document.getElementById("indicatorColor"),
+    histogram: document.getElementById("indicatorHistogram"),
+    extension: document.getElementById("indicatorExtension")
+};
+
+
+/* =========================================================
+   State
    ========================================================= */
 
 let selectedFile = null;
-
 let aiClassifier = null;
-
 let aiLoading = false;
+let aiError = null;
 
 
 /* =========================================================
-   INITIALIZATION
+   Utility
    ========================================================= */
 
-function initializeDeepShield() {
+function setText(element, value) {
+    if (element) {
+        element.textContent = value;
+    }
+}
 
-    console.log(
-        "DeepShield AI v0.7 initializing..."
+
+function setProgressStep(element, state) {
+    if (!element) return;
+
+    element.classList.remove(
+        "active",
+        "completed",
+        "done",
+        "loading"
     );
 
-
-    if (!fileInput) {
-        console.error(
-            "DeepShield ERROR: #fileInput not found."
-        );
+    if (state === "active" || state === "loading") {
+        element.classList.add("active");
     }
 
-
-    if (!dropZone) {
-        console.error(
-            "DeepShield ERROR: #dropZone not found."
-        );
+    if (state === "completed" || state === "done") {
+        element.classList.add("completed");
     }
+}
 
 
-    if (!scanButton) {
-        console.error(
-            "DeepShield ERROR: #scanButton not found."
-        );
+function showProgress(show = true) {
+    if (analysisProgress) {
+        analysisProgress.style.display = show ? "block" : "";
     }
+}
 
 
-    setupFileInput();
-
-    setupDragAndDrop();
-
-    setupScanButton();
-
-
-    /*
-       AI loads independently.
-       Even if AI fails, uploading files
-       continues to work.
-    */
-
-    loadAIModel();
+function resetProgress() {
+    setProgressStep(progressLoad, "active");
+    setProgressStep(progressAI, "");
+    setProgressStep(progressForensics, "");
+    setProgressStep(progressReport, "");
+}
 
 
-    console.log(
-        "DeepShield AI ready."
+function updateModelStatus(text, type = "ready") {
+    if (!modelStatus) return;
+
+    modelStatus.textContent = text;
+
+    modelStatus.classList.remove(
+        "ready",
+        "loading",
+        "error",
+        "offline"
     );
 
+    modelStatus.classList.add(type);
 }
 
 
 /* =========================================================
-   FILE INPUT
+   File Validation
    ========================================================= */
 
-function setupFileInput() {
+function isImage(file) {
+    if (!file) return false;
 
-    if (!fileInput) {
-        return;
-    }
-
-
-    fileInput.addEventListener(
-        "change",
-        function (event) {
-
-            const files =
-                event.target.files;
-
-
-            if (
-                !files ||
-                files.length === 0
-            ) {
-                return;
-            }
-
-
-            const file =
-                files[0];
-
-
-            console.log(
-                "File selected:",
-                file.name
-            );
-
-
-            handleSelectedFile(file);
-
-        }
+    return (
+        CONFIG.IMAGE_TYPES.includes(file.type) ||
+        /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name)
     );
-
 }
 
 
-/* =========================================================
-   DRAG & DROP
-   ========================================================= */
+function isVideo(file) {
+    if (!file) return false;
 
-function setupDragAndDrop() {
-
-    if (!dropZone) {
-        return;
-    }
-
-
-    /*
-       IMPORTANT:
-       We DO NOT add a click listener here.
-
-       The HTML uses:
-
-       <label for="fileInput">
-
-       so the browser already opens the
-       file picker automatically.
-    */
-
-
-    dropZone.addEventListener(
-        "dragenter",
-        function (event) {
-
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            dropZone.classList.add(
-                "drag-over"
-            );
-
-        }
+    return (
+        CONFIG.VIDEO_TYPES.includes(file.type) ||
+        /\.(mp4|webm|mov|avi)$/i.test(file.name)
     );
-
-
-    dropZone.addEventListener(
-        "dragover",
-        function (event) {
-
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            if (event.dataTransfer) {
-
-                event.dataTransfer.dropEffect =
-                    "copy";
-
-            }
-
-
-            dropZone.classList.add(
-                "drag-over"
-            );
-
-        }
-    );
-
-
-    dropZone.addEventListener(
-        "dragleave",
-        function (event) {
-
-            event.preventDefault();
-
-            event.stopPropagation();
-
-
-            if (
-                !event.relatedTarget ||
-                !dropZone.contains(
-                    event.relatedTarget
-                )
-            ) {
-
-                dropZone.classList.remove(
-                    "drag-over"
-                );
-
-            }
-
-        }
-    );
-
-
-    dropZone.addEventListener(
-        "drop",
-        function (event) {
-
-            event.preventDefault();
-
-            event.stopPropagation();
-
-
-            dropZone.classList.remove(
-                "drag-over"
-            );
-
-
-            const files =
-                event.dataTransfer &&
-                event.dataTransfer.files;
-
-
-            if (
-                !files ||
-                files.length === 0
-            ) {
-
-                showFileError(
-                    "No file was detected."
-                );
-
-                return;
-
-            }
-
-
-            const file =
-                files[0];
-
-
-            console.log(
-                "Dropped file:",
-                file.name
-            );
-
-
-            /*
-               Synchronize the hidden
-               input with the dropped file
-               when the browser allows it.
-            */
-
-            try {
-
-                const dataTransfer =
-                    new DataTransfer();
-
-                dataTransfer.items.add(file);
-
-                fileInput.files =
-                    dataTransfer.files;
-
-            } catch (error) {
-
-                console.log(
-                    "Input synchronization skipped."
-                );
-
-            }
-
-
-            handleSelectedFile(file);
-
-        }
-    );
-
 }
 
 
-/* =========================================================
-   FILE HANDLING
-   ========================================================= */
-
-function handleSelectedFile(file) {
-
-    console.log(
-        "Handling file:",
-        file
-    );
-
-
-    const validation =
-        validateFile(file);
-
-
-    if (!validation.valid) {
-
-        selectedFile = null;
-
-        showFileError(
-            validation.message
-        );
-
-        return;
-
-    }
-
-
-    selectedFile = file;
-
-
-    /*
-       Display file information
-    */
-
-    if (fileSelected) {
-
-        fileSelected.classList.add(
-            "file-selected"
-        );
-
-
-        fileSelected.innerHTML = `
-
-            <strong>
-                ✅ Selected Media
-            </strong>
-
-            <br>
-
-            ${escapeHTML(file.name)}
-
-            <br>
-
-            <small>
-
-                ${formatBytes(file.size)}
-
-                ·
-
-                ${escapeHTML(
-                    file.type || "Unknown type"
-                )}
-
-            </small>
-
-        `;
-
-    }
-
-
-    /*
-       Enable analysis button
-    */
-
-    if (scanButton) {
-
-        scanButton.disabled = false;
-
-        scanButton.textContent =
-            "🧠 Start AI Analysis";
-
-    }
-
-
-    /*
-       Reset result area
-    */
-
-    if (resultEmpty) {
-
-        resultEmpty.style.display =
-            "flex";
-
-    }
-
-
-    if (analysisResult) {
-
-        analysisResult.style.display =
-            "none";
-
-    }
-
-
-    console.log(
-        "File is ready for analysis."
-    );
-
+function isSupportedFile(file) {
+    return isImage(file) || isVideo(file);
 }
 
-
-/* =========================================================
-   VALIDATION
-   ========================================================= */
 
 function validateFile(file) {
-
     if (!file) {
-
         return {
             valid: false,
             message: "No file selected."
         };
-
     }
 
-
-    if (
-        file.size >
-        CONFIG.MAX_FILE_SIZE
-    ) {
-
+    if (file.size > CONFIG.MAX_FILE_SIZE) {
         return {
             valid: false,
-            message:
-                "File is larger than 200 MB."
+            message: "File is too large. Maximum size is 200 MB."
         };
-
     }
 
-
-    const supportedMime =
-        CONFIG.IMAGE_TYPES.includes(
-            file.type
-        ) ||
-        CONFIG.VIDEO_TYPES.includes(
-            file.type
-        );
-
-
-    const supportedExtension =
-        isSupportedExtension(
-            file.name
-        );
-
-
-    if (
-        !supportedMime &&
-        !supportedExtension
-    ) {
-
+    if (!isSupportedFile(file)) {
         return {
             valid: false,
-            message:
-                "Unsupported file type. Please use JPG, PNG, WEBP, GIF, MP4, WEBM, MOV or AVI."
+            message: "Unsupported file type. Please select an image or video."
         };
-
     }
-
 
     return {
-        valid: true
+        valid: true,
+        message: "File is valid."
     };
-
 }
 
 
 /* =========================================================
-   EXTENSION
+   File Selection
    ========================================================= */
 
-function isSupportedExtension(
-    filename
-) {
+function handleFile(file) {
+    const validation = validateFile(file);
 
-    const extension =
-        filename
-            .split(".")
-            .pop()
-            .toLowerCase();
+    if (!validation.valid) {
+        selectedFile = null;
 
+        if (fileSelected) {
+            fileSelected.textContent = validation.message;
+            fileSelected.classList.add("error");
+        }
 
-    return [
+        if (scanButton) {
+            scanButton.disabled = true;
+        }
 
-        "jpg",
-        "jpeg",
-        "png",
-        "webp",
-        "gif",
-
-        "mp4",
-        "webm",
-        "mov",
-        "avi"
-
-    ].includes(extension);
-
-}
-
-
-/* =========================================================
-   SCAN BUTTON
-   ========================================================= */
-
-function setupScanButton() {
-
-    if (!scanButton) {
         return;
     }
 
+    selectedFile = file;
 
-    /*
-       Start disabled until a file is selected.
-    */
+    if (fileSelected) {
+        fileSelected.classList.remove("error");
 
-    scanButton.disabled = true;
+        fileSelected.innerHTML = `
+            <strong>${escapeHTML(file.name)}</strong>
+            <span>
+                ${formatBytes(file.size)}
+            </span>
+        `;
+    }
+
+    if (scanButton) {
+        scanButton.disabled = false;
+    }
+
+    if (analysisResult) {
+        analysisResult.style.display = "none";
+    }
+
+    if (resultEmpty) {
+        resultEmpty.style.display = "";
+    }
+}
 
 
-    scanButton.addEventListener(
-        "click",
-        async function () {
+function formatBytes(bytes) {
+    if (!bytes) return "0 Bytes";
 
-            if (!selectedFile) {
+    const units = [
+        "Bytes",
+        "KB",
+        "MB",
+        "GB"
+    ];
 
-                showFileError(
-                    "Please select an image or video first."
-                );
-
-                return;
-
-            }
-
-
-            await analyzeFile(
-                selectedFile
-            );
-
-        }
+    const index = Math.floor(
+        Math.log(bytes) / Math.log(1024)
     );
 
+    return (
+        (bytes / Math.pow(1024, index)).toFixed(2) +
+        " " +
+        units[index]
+    );
+}
+
+
+function escapeHTML(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 
 /* =========================================================
-   AI MODEL
+   File Input
+   ========================================================= */
+
+function setupFileInput() {
+    if (!fileInput) return;
+
+    fileInput.addEventListener("change", event => {
+        const file = event.target.files?.[0];
+
+        if (file) {
+            handleFile(file);
+        }
+    });
+}
+
+
+/* =========================================================
+   Drag & Drop
+   ========================================================= */
+
+function setupDragAndDrop() {
+    if (!dropZone) return;
+
+    dropZone.addEventListener("dragenter", event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        dropZone.classList.add("drag-over");
+    });
+
+    dropZone.addEventListener("dragover", event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        dropZone.classList.add("drag-over");
+
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "copy";
+        }
+    });
+
+    dropZone.addEventListener("dragleave", event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!dropZone.contains(event.relatedTarget)) {
+            dropZone.classList.remove("drag-over");
+        }
+    });
+
+    dropZone.addEventListener("drop", event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        dropZone.classList.remove("drag-over");
+
+        const file = event.dataTransfer?.files?.[0];
+
+        if (file) {
+            handleFile(file);
+        }
+    });
+}
+
+
+/* =========================================================
+   AI Model Loading
    ========================================================= */
 
 async function loadAIModel() {
-
-    if (
-        aiLoading ||
-        aiClassifier
-    ) {
+    if (aiClassifier || aiLoading) {
         return;
     }
 
-
     aiLoading = true;
+    aiError = null;
 
-
-    console.log(
-        "Loading DeepShield AI model..."
+    updateModelStatus(
+        "Loading AI model...",
+        "loading"
     );
 
+    setText(
+        aiConfidence,
+        "Loading..."
+    );
 
     try {
-
         const transformers =
             await import(
                 "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.1"
             );
 
+        const { pipeline, env } = transformers;
 
-        const pipeline =
-            transformers.pipeline;
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
 
-        const env =
-            transformers.env;
+        aiClassifier = await pipeline(
+            "image-classification",
+            CONFIG.MODEL_ID,
+            {
+                device: "wasm"
+            }
+        );
 
+        updateModelStatus(
+            "AI Model Ready",
+            "ready"
+        );
 
-        if (!pipeline) {
-
-            throw new Error(
-                "Transformers.js pipeline is unavailable."
-            );
-
-        }
-
-
-        if (env) {
-
-            env.allowLocalModels =
-                false;
-
-            env.useBrowserCache =
-                true;
-
-        }
-
+        setText(
+            aiConfidence,
+            "Ready"
+        );
 
         console.log(
-            "Downloading model:",
+            "DeepShield AI model loaded successfully:",
             CONFIG.MODEL_ID
         );
 
-
-        aiClassifier =
-            await pipeline(
-                "image-classification",
-                CONFIG.MODEL_ID,
-                {
-                    device: "wasm"
-                }
-            );
-
-
-        console.log(
-            "DeepShield AI model loaded."
-        );
-
-
-        updateAIStatus(
-            "AI model ready"
-        );
-
     } catch (error) {
 
         console.error(
-            "AI model loading failed:",
+            "DeepShield AI model loading failed:",
             error
         );
 
+        aiError = error;
 
-        aiClassifier = null;
-
-
-        updateAIStatus(
-            "AI model unavailable"
+        updateModelStatus(
+            "AI Model Error",
+            "error"
         );
 
-    } finally {
-
-        aiLoading = false;
-
+        setText(
+            aiConfidence,
+            "Unavailable"
+        );
     }
 
+    aiLoading = false;
 }
 
 
 /* =========================================================
-   ANALYSIS
-   ========================================================= */
-
-async function analyzeFile(file) {
-
-    console.log(
-        "Starting analysis:",
-        file.name
-    );
-
-
-    if (resultEmpty) {
-
-        resultEmpty.style.display =
-            "none";
-
-    }
-
-
-    if (analysisResult) {
-
-        analysisResult.style.display =
-            "block";
-
-    }
-
-
-    if (scanButton) {
-
-        scanButton.disabled = true;
-
-        scanButton.textContent =
-            "⏳ Analyzing media...";
-
-    }
-
-
-    if (aiConfidence) {
-
-        aiConfidence.textContent =
-            "Analyzing...";
-
-    }
-
-
-    try {
-
-        /*
-           IMAGE
-        */
-
-        if (
-            file.type.startsWith(
-                "image/"
-            ) ||
-            isImageExtension(file.name)
-        ) {
-
-            const forensic =
-                await runImageForensics(
-                    file
-                );
-
-
-            let aiResult = null;
-
-
-            if (aiClassifier) {
-
-                try {
-
-                    aiResult =
-                        await runAIAnalysis(
-                            file
-                        );
-
-                } catch (error) {
-
-                    console.error(
-                        "AI inference failed:",
-                        error
-                    );
-
-                }
-
-            }
-
-
-            displayResults(
-                file,
-                forensic,
-                aiResult
-            );
-
-
-        }
-
-        /*
-           VIDEO
-        */
-
-        else if (
-            file.type.startsWith(
-                "video/"
-            ) ||
-            isVideoExtension(file.name)
-        ) {
-
-            const forensic =
-                await analyzeVideo(
-                    file
-                );
-
-
-            displayVideoResults(
-                file,
-                forensic
-            );
-
-        }
-
-
-    } catch (error) {
-
-        console.error(
-            "Analysis error:",
-            error
-        );
-
-
-        showFileError(
-            "Analysis failed. Please try another file."
-        );
-
-
-    } finally {
-
-        if (scanButton) {
-
-            scanButton.disabled = false;
-
-            scanButton.textContent =
-                "🧠 Start AI Analysis";
-
-        }
-
-    }
-
-}
-
-
-/* =========================================================
-   AI INFERENCE
+   AI Analysis
    ========================================================= */
 
 async function runAIAnalysis(file) {
-
     if (!aiClassifier) {
-        return null;
+        await loadAIModel();
     }
 
-
-    console.log(
-        "Running AI inference..."
-    );
-
+    if (!aiClassifier) {
+        throw new Error(
+            "AI model is not available."
+        );
+    }
 
     const imageURL =
         URL.createObjectURL(file);
 
-
     try {
-
         const results =
-            await aiClassifier(
-                imageURL
-            );
+            await aiClassifier(imageURL);
 
-
-        console.log(
-            "AI results:",
-            results
-        );
-
-
-        return normalizeAIResults(
-            results
-        );
+        return normalizeAIResults(results);
 
     } finally {
-
-        URL.revokeObjectURL(
-            imageURL
-        );
-
+        URL.revokeObjectURL(imageURL);
     }
-
 }
 
 
 /* =========================================================
-   NORMALIZE AI
+   Normalize AI Results
    ========================================================= */
 
-function normalizeAIResults(
-    results
-) {
+function normalizeAIResults(results) {
 
-    if (
-        !Array.isArray(results) ||
-        results.length === 0
-    ) {
-
-        return null;
-
+    if (!Array.isArray(results)) {
+        throw new Error(
+            "Invalid AI model response."
+        );
     }
 
+    let deepfakeScore = 0;
+    let realismScore = 0;
 
-    const sorted =
-        [...results].sort(
-            (a, b) =>
-                (b.score || 0) -
-                (a.score || 0)
-        );
-
-
-    let deepfake = null;
-
-    let realism = null;
-
-
-    for (const result of results) {
+    results.forEach(result => {
 
         const label =
-            String(
-                result.label || ""
-            ).toLowerCase();
+            String(result.label || "")
+                .toLowerCase();
 
-
-        if (
-            label.includes(
-                "deepfake"
-            ) ||
-            label.includes(
-                "fake"
-            )
-        ) {
-
-            deepfake =
-                result.score;
-
-        }
-
+        const score =
+            Number(result.score || 0);
 
         if (
-            label.includes(
-                "real"
-            ) ||
-            label.includes(
-                "realism"
-            )
+            label.includes("deepfake") ||
+            label.includes("fake")
         ) {
-
-            realism =
-                result.score;
-
+            deepfakeScore = score;
         }
 
-    }
+        if (
+            label.includes("realism") ||
+            label.includes("real")
+        ) {
+            realismScore = score;
+        }
+    });
 
+    /*
+       If the model returns only one label,
+       derive the opposite probability.
+    */
 
     if (
-        deepfake === null &&
-        realism === null
+        deepfakeScore === 0 &&
+        realismScore > 0
     ) {
-
-        const top =
-            sorted[0];
-
-
-        return {
-
-            label:
-                top.label,
-
-            confidence:
-                Math.round(
-                    (top.score || 0) *
-                    100
-                ),
-
-            deepfakeProbability:
-                null
-
-        };
-
+        deepfakeScore =
+            Math.max(0, 1 - realismScore);
     }
 
+    if (
+        realismScore === 0 &&
+        deepfakeScore > 0
+    ) {
+        realismScore =
+            Math.max(0, 1 - deepfakeScore);
+    }
+
+    /*
+       Normalize if necessary.
+    */
+
+    const total =
+        deepfakeScore +
+        realismScore;
+
+    if (total > 0) {
+        deepfakeScore /= total;
+        realismScore /= total;
+    }
+
+    const isDeepfake =
+        deepfakeScore >= realismScore;
+
+    const confidence =
+        Math.max(
+            deepfakeScore,
+            realismScore
+        );
 
     return {
-
-        label:
-            deepfake !== null &&
-            deepfake >=
-            (realism || 0)
+        classification:
+            isDeepfake
                 ? "Deepfake"
                 : "Realism",
 
-
         confidence:
-            Math.round(
-                Math.max(
-                    deepfake || 0,
-                    realism || 0
-                ) * 100
-            ),
-
+            confidence * 100,
 
         deepfakeProbability:
-            Math.round(
-                (deepfake || 0) *
-                100
-            ),
-
+            deepfakeScore * 100,
 
         realismProbability:
-            Math.round(
-                (realism || 0) *
-                100
-            )
+            realismScore * 100,
 
+        rawResults: results
     };
-
 }
 
 
 /* =========================================================
-   IMAGE FORENSICS
+   Image Forensics
    ========================================================= */
 
-async function runImageForensics(
-    file
-) {
+async function runImageForensics(file) {
+
+    if (!isImage(file)) {
+        return {
+            type: "video",
+            score: 0,
+            metrics: null
+        };
+    }
 
     const image =
         await loadImage(file);
 
+    const MAX_SIZE = 512;
 
-    const maxSize = 512;
-
+    let width = image.naturalWidth;
+    let height = image.naturalHeight;
 
     const scale =
         Math.min(
             1,
-            maxSize /
-            Math.max(
-                image.naturalWidth,
-                image.naturalHeight
-            )
+            MAX_SIZE / Math.max(width, height)
         );
 
-
-    const width =
+    width =
         Math.max(
             1,
-            Math.round(
-                image.naturalWidth *
-                scale
-            )
+            Math.round(width * scale)
         );
 
-
-    const height =
+    height =
         Math.max(
             1,
-            Math.round(
-                image.naturalHeight *
-                scale
-            )
+            Math.round(height * scale)
         );
-
 
     const canvas =
-        document.createElement(
-            "canvas"
-        );
+        document.createElement("canvas");
 
-
-    canvas.width =
-        width;
-
-    canvas.height =
-        height;
-
+    canvas.width = width;
+    canvas.height = height;
 
     const ctx =
-        canvas.getContext(
-            "2d",
-            {
-                willReadFrequently: true
-            }
-        );
-
-
-    if (!ctx) {
-
-        throw new Error(
-            "Canvas is unavailable."
-        );
-
-    }
-
+        canvas.getContext("2d", {
+            willReadFrequently: true
+        });
 
     ctx.drawImage(
         image,
@@ -1130,7 +622,6 @@ async function runImageForensics(
         height
     );
 
-
     const imageData =
         ctx.getImageData(
             0,
@@ -1139,50 +630,104 @@ async function runImageForensics(
             height
         );
 
-
     const pixels =
         imageData.data;
 
+    const metrics =
+        calculatePixelMetrics(
+            pixels,
+            width,
+            height
+        );
+
+    const score =
+        calculateForensicScore(metrics);
+
+    return {
+        type: "image",
+        width,
+        height,
+        score,
+        metrics
+    };
+}
+
+
+function loadImage(file) {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            const image =
+                new Image();
+
+            const url =
+                URL.createObjectURL(file);
+
+            image.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve(image);
+            };
+
+            image.onerror = () => {
+                URL.revokeObjectURL(url);
+
+                reject(
+                    new Error(
+                        "Unable to read image."
+                    )
+                );
+            };
+
+            image.src = url;
+        }
+    );
+}
+
+
+/* =========================================================
+   Pixel Metrics
+   ========================================================= */
+
+function calculatePixelMetrics(
+    pixels,
+    width,
+    height
+) {
 
     let sumLuma = 0;
-
     let sumLumaSq = 0;
 
-    let sumSat = 0;
+    let saturationSum = 0;
+    let saturationSq = 0;
 
-    let sumSatSq = 0;
-
-    let edgeSum = 0;
-
+    let channelDeviationSum = 0;
 
     const histogram =
-        new Array(256)
-            .fill(0);
+        new Array(256).fill(0);
 
+    const lumaValues = [];
 
-    const sampleStep = 4;
+    let edgeSum = 0;
+    let edgeCount = 0;
 
-    let samples = 0;
-
+    let noiseSum = 0;
+    let noiseCount = 0;
 
     for (
         let y = 0;
         y < height;
-        y += sampleStep
+        y++
     ) {
 
         for (
             let x = 0;
             x < width;
-            x += sampleStep
+            x++
         ) {
 
             const index =
-                (
-                    y * width +
-                    x
-                ) * 4;
-
+                (y * width + x) * 4;
 
             const r =
                 pixels[index];
@@ -1193,312 +738,182 @@ async function runImageForensics(
             const b =
                 pixels[index + 2];
 
-
             const luma =
-                0.2126 * r +
-                0.7152 * g +
-                0.0722 * b;
+                0.299 * r +
+                0.587 * g +
+                0.114 * b;
 
+            sumLuma += luma;
+            sumLumaSq += luma * luma;
 
-            sumLuma +=
-                luma;
-
-            sumLumaSq +=
-                luma * luma;
-
-
-            const max =
-                Math.max(
-                    r,
-                    g,
-                    b
-                );
-
-
-            const min =
-                Math.min(
-                    r,
-                    g,
-                    b
-                );
-
-
-            const sat =
-                max === 0
-                    ? 0
-                    : (
-                        max - min
-                    ) / max;
-
-
-            sumSat +=
-                sat;
-
-            sumSatSq +=
-                sat * sat;
-
+            lumaValues.push(luma);
 
             histogram[
-                Math.round(luma)
+                Math.max(
+                    0,
+                    Math.min(
+                        255,
+                        Math.round(luma)
+                    )
+                )
             ]++;
 
+            const maxRGB =
+                Math.max(r, g, b);
 
-            if (
-                x + sampleStep <
-                width
-            ) {
+            const minRGB =
+                Math.min(r, g, b);
 
-                const nextIndex =
-                    (
-                        y * width +
-                        x +
-                        sampleStep
-                    ) * 4;
+            const saturation =
+                maxRGB === 0
+                    ? 0
+                    : (maxRGB - minRGB) /
+                      maxRGB;
 
+            saturationSum += saturation;
+            saturationSq +=
+                saturation * saturation;
 
-                const nr =
-                    pixels[nextIndex];
+            channelDeviationSum +=
+                (
+                    Math.abs(r - g) +
+                    Math.abs(g - b) +
+                    Math.abs(r - b)
+                ) / 3;
 
-                const ng =
-                    pixels[
-                        nextIndex + 1
-                    ];
+            /*
+               Horizontal edge strength
+            */
 
-                const nb =
-                    pixels[
-                        nextIndex + 2
-                    ];
+            if (x > 0) {
 
+                const prevIndex =
+                    (y * width + (x - 1)) * 4;
 
-                const nextLuma =
-                    0.2126 * nr +
-                    0.7152 * ng +
-                    0.0722 * nb;
-
+                const prevLuma =
+                    0.299 * pixels[prevIndex] +
+                    0.587 * pixels[prevIndex + 1] +
+                    0.114 * pixels[prevIndex + 2];
 
                 edgeSum +=
                     Math.abs(
-                        luma -
-                        nextLuma
+                        luma - prevLuma
                     );
 
+                edgeCount++;
+
+                /*
+                   Local noise estimate
+                */
+
+                if (x > 1) {
+
+                    const prevPrevIndex =
+                        (y * width + (x - 2)) * 4;
+
+                    const prevPrevLuma =
+                        0.299 * pixels[prevPrevIndex] +
+                        0.587 * pixels[prevPrevIndex + 1] +
+                        0.114 * pixels[prevPrevIndex + 2];
+
+                    const expected =
+                        (
+                            prevPrevLuma +
+                            luma
+                        ) / 2;
+
+                    noiseSum +=
+                        Math.abs(
+                            prevLuma - expected
+                        );
+
+                    noiseCount++;
+                }
             }
-
-
-            samples++;
-
         }
-
     }
 
+    const totalPixels =
+        width * height;
 
-    const lumaMean =
-        sumLuma /
-        samples;
+    const meanLuma =
+        sumLuma / totalPixels;
 
-
-    const lumaVariance =
+    const varianceLuma =
         Math.max(
             0,
-            sumLumaSq /
-            samples -
-            lumaMean *
-            lumaMean
+            sumLumaSq / totalPixels -
+            meanLuma * meanLuma
         );
-
 
     const lumaStd =
-        Math.sqrt(
-            lumaVariance
-        );
-
+        Math.sqrt(varianceLuma);
 
     const saturationMean =
-        sumSat /
-        samples *
-        100;
-
+        saturationSum / totalPixels;
 
     const saturationVariance =
         Math.max(
             0,
-            sumSatSq /
-            samples -
-            Math.pow(
-                sumSat /
-                samples,
-                2
-            )
+            saturationSq / totalPixels -
+            saturationMean * saturationMean
         );
 
-
     const saturationStd =
-        Math.sqrt(
-            saturationVariance
-        ) * 100;
+        Math.sqrt(saturationVariance);
 
+    const channelDeviation =
+        channelDeviationSum /
+        totalPixels;
+
+    const edgeStrength =
+        edgeCount > 0
+            ? edgeSum / edgeCount
+            : 0;
+
+    const noiseLevel =
+        noiseCount > 0
+            ? noiseSum / noiseCount
+            : 0;
+
+    const histogramRange =
+        calculateHistogramRange(histogram);
 
     const entropy =
         calculateEntropy(
             histogram,
-            samples
+            totalPixels
         );
-
-
-    const histogramRange =
-        calculateHistogramRange(
-            histogram
-        );
-
-
-    const edgeStrength =
-        edgeSum /
-        samples;
-
-
-    const noiseLevel =
-        calculateNoise(
-            pixels,
-            width,
-            height
-        );
-
-
-    const channelDeviation =
-        calculateChannelDeviation(
-            pixels,
-            sampleStep
-        );
-
 
     const blockiness =
         calculateBlockiness(
-            pixels,
+            lumaValues,
             width,
             height
         );
 
-
-    const score =
-        calculateForensicScore({
-            width,
-            height,
-            entropy,
-            edgeStrength,
-            noiseLevel,
-            blockiness,
-            channelDeviation,
-            histogramRange,
-            saturationMean
-        });
-
-
     return {
-
-        width,
-        height,
-
-        lumaMean,
+        meanLuma,
         lumaStd,
 
         saturationMean,
         saturationStd,
 
-        entropy,
-
-        edgeStrength,
-
-        noiseLevel,
-
-        blockiness,
-
         channelDeviation,
 
+        edgeStrength,
+        noiseLevel,
+
         histogramRange,
+        entropy,
 
-        score
-
+        blockiness
     };
-
 }
 
 
 /* =========================================================
-   FORENSIC SCORE
-   ========================================================= */
-
-function calculateForensicScore(
-    data
-) {
-
-    let score = 0;
-
-
-    if (data.entropy < 4) {
-        score += 12;
-    }
-
-
-    if (data.edgeStrength < 1.5) {
-        score += 10;
-    }
-
-
-    if (
-        data.noiseLevel < 0.5 ||
-        data.noiseLevel > 8
-    ) {
-
-        score += 12;
-
-    }
-
-
-    if (data.blockiness > 8) {
-        score += 15;
-    }
-
-
-    if (
-        data.channelDeviation >
-        40
-    ) {
-
-        score += 12;
-
-    }
-
-
-    if (
-        data.histogramRange <
-        100
-    ) {
-
-        score += 10;
-
-    }
-
-
-    if (
-        data.saturationMean <
-        8
-    ) {
-
-        score += 5;
-
-    }
-
-
-    return Math.min(
-        100,
-        Math.round(score)
-    );
-
-}
-
-
-/* =========================================================
-   ENTROPY
+   Entropy
    ========================================================= */
 
 function calculateEntropy(
@@ -1508,46 +923,36 @@ function calculateEntropy(
 
     let entropy = 0;
 
-
     for (
-        const count of histogram
+        let i = 0;
+        i < histogram.length;
+        i++
     ) {
 
-        if (count === 0) {
+        if (histogram[i] === 0) {
             continue;
         }
 
-
         const probability =
-            count / total;
-
+            histogram[i] / total;
 
         entropy -=
             probability *
-            Math.log2(
-                probability
-            );
-
+            Math.log2(probability);
     }
 
-
     return entropy;
-
 }
 
 
 /* =========================================================
-   HISTOGRAM
+   Histogram Range
    ========================================================= */
 
-function calculateHistogramRange(
-    histogram
-) {
+function calculateHistogramRange(histogram) {
 
     let first = -1;
-
     let last = -1;
-
 
     for (
         let i = 0;
@@ -1555,1084 +960,1006 @@ function calculateHistogramRange(
         i++
     ) {
 
-        if (
-            histogram[i] > 0
-        ) {
-
+        if (histogram[i] > 0) {
             first = i;
-
             break;
-
         }
-
     }
 
-
     for (
-        let i =
-            histogram.length - 1;
+        let i = histogram.length - 1;
         i >= 0;
         i--
     ) {
 
-        if (
-            histogram[i] > 0
-        ) {
-
+        if (histogram[i] > 0) {
             last = i;
-
             break;
-
         }
-
     }
-
 
     if (
         first === -1 ||
         last === -1
     ) {
-
         return 0;
-
     }
 
-
     return last - first;
-
 }
 
 
 /* =========================================================
-   NOISE
+   Blockiness
    ========================================================= */
 
-function calculateNoise(
-    pixels,
+function calculateBlockiness(
+    luma,
     width,
     height
 ) {
 
-    let sum = 0;
+    if (
+        width < 16 ||
+        height < 16
+    ) {
+        return 0;
+    }
 
-    let count = 0;
-
+    let boundarySum = 0;
+    let boundaryCount = 0;
 
     for (
-        let y = 1;
-        y < height - 1;
-        y += 4
+        let y = 0;
+        y < height;
+        y++
     ) {
 
         for (
             let x = 1;
-            x < width - 1;
-            x += 4
+            x < width;
+            x++
         ) {
 
-            const index =
-                (
-                    y * width +
-                    x
-                ) * 4;
+            if (x % 8 === 0) {
 
+                const current =
+                    luma[
+                        y * width + x
+                    ];
 
-            const center =
-                pixels[index];
+                const previous =
+                    luma[
+                        y * width + x - 1
+                    ];
 
+                boundarySum +=
+                    Math.abs(
+                        current - previous
+                    );
 
-            const left =
-                pixels[
-                    (
-                        y * width +
-                        x - 1
-                    ) * 4
-                ];
-
-
-            const right =
-                pixels[
-                    (
-                        y * width +
-                        x + 1
-                    ) * 4
-                ];
-
-
-            const top =
-                pixels[
-                    (
-                        (y - 1) *
-                        width +
-                        x
-                    ) * 4
-                ];
-
-
-            const bottom =
-                pixels[
-                    (
-                        (y + 1) *
-                        width +
-                        x
-                    ) * 4
-                ];
-
-
-            const average =
-                (
-                    left +
-                    right +
-                    top +
-                    bottom
-                ) / 4;
-
-
-            sum +=
-                Math.abs(
-                    center -
-                    average
-                );
-
-
-            count++;
-
+                boundaryCount++;
+            }
         }
-
     }
 
-
-    return count
-        ? sum / count
+    return boundaryCount > 0
+        ? boundarySum / boundaryCount
         : 0;
-
 }
 
 
 /* =========================================================
-   CHANNEL DEVIATION
+   Forensic Score
    ========================================================= */
 
-function calculateChannelDeviation(
-    pixels,
-    step
-) {
-
-    let sumR = 0;
-
-    let sumG = 0;
-
-    let sumB = 0;
-
-    let count = 0;
-
-
-    for (
-        let i = 0;
-        i < pixels.length;
-        i += 4 * step
-    ) {
-
-        sumR +=
-            pixels[i];
-
-        sumG +=
-            pixels[i + 1];
-
-        sumB +=
-            pixels[i + 2];
-
-        count++;
-
-    }
-
-
-    if (!count) {
-        return 0;
-    }
-
-
-    const r =
-        sumR / count;
-
-    const g =
-        sumG / count;
-
-    const b =
-        sumB / count;
-
-
-    return (
-        Math.max(
-            r,
-            g,
-            b
-        ) -
-        Math.min(
-            r,
-            g,
-            b
-        )
-    );
-
-}
-
-
-/* =========================================================
-   BLOCKINESS
-   ========================================================= */
-
-function calculateBlockiness(
-    pixels,
-    width,
-    height
-) {
+function calculateForensicScore(metrics) {
 
     let score = 0;
 
-    let count = 0;
+    /*
+       Low entropy
+    */
 
-    const block = 8;
-
-
-    for (
-        let x = block;
-        x < width;
-        x += block
-    ) {
-
-        for (
-            let y = 0;
-            y < height;
-            y += 8
-        ) {
-
-            const a =
-                pixels[
-                    (
-                        y * width +
-                        x - 1
-                    ) * 4
-                ];
-
-
-            const b =
-                pixels[
-                    (
-                        y * width +
-                        x
-                    ) * 4
-                ];
-
-
-            score +=
-                Math.abs(
-                    a - b
-                );
-
-
-            count++;
-
-        }
-
+    if (metrics.entropy < 4.5) {
+        score += 18;
+    } else if (metrics.entropy < 5.2) {
+        score += 10;
     }
 
+    /*
+       Low edge detail
+    */
 
-    return count
-        ? score / count
-        : 0;
+    if (metrics.edgeStrength < 2) {
+        score += 16;
+    } else if (metrics.edgeStrength < 4) {
+        score += 8;
+    }
 
+    /*
+       Noise
+    */
+
+    if (
+        metrics.noiseLevel < 0.7 ||
+        metrics.noiseLevel > 8
+    ) {
+        score += 12;
+    } else if (
+        metrics.noiseLevel < 1 ||
+        metrics.noiseLevel > 6
+    ) {
+        score += 6;
+    }
+
+    /*
+       Blockiness
+    */
+
+    if (metrics.blockiness > 8) {
+        score += 18;
+    } else if (metrics.blockiness > 4) {
+        score += 10;
+    }
+
+    /*
+       Channel deviation
+    */
+
+    if (
+        metrics.channelDeviation > 70
+    ) {
+        score += 12;
+    } else if (
+        metrics.channelDeviation > 50
+    ) {
+        score += 6;
+    }
+
+    /*
+       Histogram range
+    */
+
+    if (
+        metrics.histogramRange < 100
+    ) {
+        score += 14;
+    } else if (
+        metrics.histogramRange < 160
+    ) {
+        score += 7;
+    }
+
+    /*
+       Very low saturation
+    */
+
+    if (
+        metrics.saturationMean < 0.08
+    ) {
+        score += 10;
+    }
+
+    return Math.min(
+        100,
+        Math.round(score)
+    );
 }
 
 
 /* =========================================================
-   DISPLAY RESULTS
+   Indicator Helpers
    ========================================================= */
 
-function displayResults(
+function getEdgeLabel(value) {
+
+    if (value < 2) {
+        return "Low";
+    }
+
+    if (value < 5) {
+        return "Moderate";
+    }
+
+    return "High";
+}
+
+
+function getNoiseLabel(value) {
+
+    if (value < 0.7) {
+        return "Very Low";
+    }
+
+    if (value < 3.5) {
+        return "Normal";
+    }
+
+    if (value < 6) {
+        return "Elevated";
+    }
+
+    return "High";
+}
+
+
+function getCompressionLabel(blockiness) {
+
+    if (blockiness < 2) {
+        return "Low";
+    }
+
+    if (blockiness < 5) {
+        return "Moderate";
+    }
+
+    return "High";
+}
+
+
+function getColorLabel(channelDeviation) {
+
+    if (channelDeviation < 25) {
+        return "Balanced";
+    }
+
+    if (channelDeviation < 50) {
+        return "Moderate Channel Bias";
+    }
+
+    return "Strong Channel Bias";
+}
+
+
+function getEntropyLabel(entropy) {
+
+    if (entropy < 4.5) {
+        return "Low Complexity";
+    }
+
+    if (entropy < 6) {
+        return "Moderate Complexity";
+    }
+
+    return "High Complexity";
+}
+
+
+/* =========================================================
+   Display Indicators
+   ========================================================= */
+
+function displayIndicators(
+    file,
+    forensic
+) {
+
+    if (!forensic || !forensic.metrics) {
+        return;
+    }
+
+    const m =
+        forensic.metrics;
+
+    setText(
+        indicators.fileStructure,
+        "Normal"
+    );
+
+    setText(
+        indicators.resolution,
+        `${forensic.width} × ${forensic.height}`
+    );
+
+    const aspectRatio =
+        forensic.height > 0
+            ? forensic.width / forensic.height
+            : 0;
+
+    setText(
+        indicators.aspect,
+        aspectRatio.toFixed(2)
+    );
+
+    setText(
+        indicators.edges,
+        getEdgeLabel(
+            m.edgeStrength
+        )
+    );
+
+    setText(
+        indicators.noise,
+        getNoiseLabel(
+            m.noiseLevel
+        )
+    );
+
+    setText(
+        indicators.entropy,
+        m.entropy.toFixed(3)
+    );
+
+    setText(
+        indicators.compression,
+        getCompressionLabel(
+            m.blockiness
+        )
+    );
+
+    setText(
+        indicators.color,
+        getColorLabel(
+            m.channelDeviation
+        )
+    );
+
+    setText(
+        indicators.histogram,
+        `${Math.round(m.histogramRange)} / 255`
+    );
+
+    setText(
+        indicators.extension,
+        isSupportedFile(file)
+            ? "Supported"
+            : "Unsupported"
+    );
+}
+
+
+/* =========================================================
+   AI Display
+   ========================================================= */
+
+function displayAIResults(aiResult) {
+
+    if (!aiResult) {
+        setText(
+            aiConfidence,
+            "Unavailable"
+        );
+
+        setText(
+            aiClassification,
+            "Unavailable"
+        );
+
+        setText(
+            deepfakeProbability,
+            "—"
+        );
+
+        setText(
+            realismProbability,
+            "—"
+        );
+
+        return;
+    }
+
+    const deepfake =
+        Math.round(
+            aiResult.deepfakeProbability
+        );
+
+    const realism =
+        Math.round(
+            aiResult.realismProbability
+        );
+
+    const confidence =
+        Math.round(
+            aiResult.confidence
+        );
+
+    setText(
+        aiConfidence,
+        `${confidence}%`
+    );
+
+    setText(
+        aiClassification,
+        aiResult.classification
+    );
+
+    setText(
+        deepfakeProbability,
+        `${deepfake}%`
+    );
+
+    setText(
+        realismProbability,
+        `${realism}%`
+    );
+}
+
+
+/* =========================================================
+   Overall Assessment
+   ========================================================= */
+
+function calculateAssessment(aiResult, forensicScore) {
+
+    if (!aiResult) {
+
+        if (forensicScore >= 60) {
+            return {
+                label: "HIGH — Forensic indicators require review",
+                className: "high"
+            };
+        }
+
+        if (forensicScore >= 30) {
+            return {
+                label: "MEDIUM — Some forensic anomalies detected",
+                className: "medium"
+            };
+        }
+
+        return {
+            label: "LOW — No major forensic anomalies detected",
+            className: "low"
+        };
+    }
+
+    const deepfake =
+        aiResult.deepfakeProbability;
+
+    if (deepfake >= 75) {
+        return {
+            label:
+                "HIGH — AI indicates possible deepfake",
+            className: "high"
+        };
+    }
+
+    if (deepfake >= 40) {
+        return {
+            label:
+                "MEDIUM — AI indicates suspicious media",
+            className: "medium"
+        };
+    }
+
+    return {
+        label:
+            "LOW — AI indicates likely real media",
+        className: "low"
+    };
+}
+
+
+/* =========================================================
+   Forensic Details
+   ========================================================= */
+
+function displayForensicDetails(
     file,
     forensic,
     aiResult
 ) {
 
-    if (aiConfidence) {
-
-        if (aiResult) {
-
-            aiConfidence.textContent =
-                `${aiResult.confidence}%`;
-
-        } else {
-
-            aiConfidence.textContent =
-                "Unavailable";
-
-        }
-
+    if (!forensicDetails) {
+        return;
     }
 
+    let aiSection = "";
 
-    if (scoreElement) {
+    if (aiResult) {
 
-        scoreElement.textContent =
-            `${forensic.score}%`;
+        aiSection = `
+            <h4>AI Detection</h4>
 
+            <p>
+                <strong>AI Classification:</strong>
+                ${escapeHTML(aiResult.classification)}
+            </p>
+
+            <p>
+                <strong>AI Confidence:</strong>
+                ${Math.round(aiResult.confidence)}%
+            </p>
+
+            <p>
+                <strong>Deepfake Probability:</strong>
+                ${Math.round(aiResult.deepfakeProbability)}%
+            </p>
+
+            <p>
+                <strong>Realism Probability:</strong>
+                ${Math.round(aiResult.realismProbability)}%
+            </p>
+        `;
+    } else {
+
+        aiSection = `
+            <h4>AI Detection</h4>
+
+            <p>
+                <strong>Status:</strong>
+                AI model unavailable
+            </p>
+        `;
     }
 
-
-    if (riskLevel) {
-
-        if (
-            aiResult &&
-            aiResult.deepfakeProbability != null
-        ) {
-
-            const probability =
-                aiResult.deepfakeProbability;
-
-
-            if (probability >= 75) {
-
-                riskLevel.textContent =
-                    "HIGH — AI indicates possible deepfake";
-
-            } else if (
-                probability >= 40
-            ) {
-
-                riskLevel.textContent =
-                    "MEDIUM — AI indicates suspicious media";
-
-            } else {
-
-                riskLevel.textContent =
-                    "LOW — AI indicates likely real media";
-
-            }
-
-        } else {
-
-            if (forensic.score >= 60) {
-
-                riskLevel.textContent =
-                    "HIGH FORENSIC ANOMALY";
-
-            } else if (
-                forensic.score >= 30
-            ) {
-
-                riskLevel.textContent =
-                    "MEDIUM FORENSIC ANOMALY";
-
-            } else {
-
-                riskLevel.textContent =
-                    "LOW FORENSIC ANOMALY";
-
-            }
-
-        }
-
-    }
-
-
-    setIndicator(
-        "indicatorFileStructure",
-        "Normal"
-    );
-
-
-    setIndicator(
-        "indicatorResolution",
-        `${forensic.width} × ${forensic.height}`
-    );
-
-
-    setIndicator(
-        "indicatorAspect",
-        calculateAspect(
-            forensic.width,
-            forensic.height
-        )
-    );
-
-
-    setIndicator(
-        "indicatorEdges",
-        classifyEdge(
-            forensic.edgeStrength
-        )
-    );
-
-
-    setIndicator(
-        "indicatorNoise",
-        classifyNoise(
-            forensic.noiseLevel
-        )
-    );
-
-
-    setIndicator(
-        "indicatorEntropy",
-        forensic.entropy.toFixed(3)
-    );
-
-
-    setIndicator(
-        "indicatorCompression",
-        classifyCompression(
-            forensic.blockiness
-        )
-    );
-
-
-    setIndicator(
-        "indicatorColor",
-        classifyColor(
-            forensic.channelDeviation
-        )
-    );
-
-
-    setIndicator(
-        "indicatorHistogram",
-        `${forensic.histogramRange} / 255`
-    );
-
-
-    setIndicator(
-        "indicatorExtension",
-        "Supported"
-    );
-
-
-    if (forensicDetails) {
-
-        let aiText =
-            "AI Model: Not available";
-
-
-        if (aiResult) {
-
-            aiText = `
-
-                AI Classification:
-                ${escapeHTML(
-                    aiResult.label
-                )}
-
-                <br>
-
-                AI Confidence:
-                ${aiResult.confidence}%
-
-                <br>
-
-                ${
-                    aiResult.deepfakeProbability != null
-                        ? `
-                            Deepfake Probability:
-                            ${aiResult.deepfakeProbability}%
-                            <br>
-                          `
-                        : ""
-                }
-
-                ${
-                    aiResult.realismProbability != null
-                        ? `
-                            Realism Probability:
-                            ${aiResult.realismProbability}%
-                          `
-                        : ""
-                }
-
-            `;
-
-        }
-
+    if (
+        forensic.type === "video"
+    ) {
 
         forensicDetails.innerHTML = `
+            <p>
+                <strong>File:</strong>
+                ${escapeHTML(file.name)}
+            </p>
 
-            <strong>File</strong>:
-            ${escapeHTML(file.name)}
+            <p>
+                <strong>Type:</strong>
+                ${escapeHTML(file.type || "video")}
+            </p>
 
-            <br>
+            <p>
+                <strong>Size:</strong>
+                ${formatBytes(file.size)}
+            </p>
 
-            <strong>Type</strong>:
-            ${escapeHTML(
-                file.type ||
-                "Unknown"
-            )}
+            ${aiSection}
 
-            <br>
+            <h4>Video Analysis</h4>
 
-            <strong>Size</strong>:
-            ${formatBytes(file.size)}
+            <p>
+                Frame-level video analysis is not yet enabled.
+            </p>
 
-            <br>
+            <p>
+                The current AI model performs image classification.
+                Video support will require frame extraction and
+                frame-by-frame analysis.
+            </p>
 
-            <strong>Resolution</strong>:
-            ${forensic.width}
-            ×
-            ${forensic.height}
-
-            <br><br>
-
-            <strong>AI Detection</strong>
-
-            <br>
-
-            ${aiText}
-
-            <br><br>
-
-            <strong>Pixel Forensics</strong>
-
-            <br>
-
-            Luminance Mean:
-            ${forensic.lumaMean.toFixed(2)}
-
-            <br>
-
-            Luminance Std:
-            ${forensic.lumaStd.toFixed(2)}
-
-            <br>
-
-            Saturation:
-            ${forensic.saturationMean.toFixed(2)}%
-
-            <br>
-
-            Entropy:
-            ${forensic.entropy.toFixed(3)}
-
-            <br>
-
-            Edge Strength:
-            ${forensic.edgeStrength.toFixed(3)}
-
-            <br>
-
-            Noise Level:
-            ${forensic.noiseLevel.toFixed(3)}
-
-            <br>
-
-            Blockiness:
-            ${forensic.blockiness.toFixed(2)}
-
-            <br>
-
-            Channel Deviation:
-            ${forensic.channelDeviation.toFixed(2)}
-
-            <br>
-
-            Histogram Range:
-            ${forensic.histogramRange}
-
-            <br>
-
-            Forensic Anomaly Score:
-            ${forensic.score}%
-
+            <p>
+                ⚠️ AI classification is an analytical signal,
+                not definitive proof of manipulation.
+            </p>
         `;
-
-    }
-
-}
-
-
-/* =========================================================
-   VIDEO
-   ========================================================= */
-
-async function analyzeVideo(
-    file
-) {
-
-    return {
-
-        score: 0,
-
-        note:
-            "Video metadata analysis only. " +
-            "Frame-level AI detection is not connected yet."
-
-    };
-
-}
-
-
-function displayVideoResults(
-    file,
-    forensic
-) {
-
-    if (aiConfidence) {
-
-        aiConfidence.textContent =
-            "Video";
-
-    }
-
-
-    if (scoreElement) {
-
-        scoreElement.textContent =
-            "—";
-
-    }
-
-
-    if (riskLevel) {
-
-        riskLevel.textContent =
-            "VIDEO FRAME ANALYSIS PENDING";
-
-    }
-
-
-    if (forensicDetails) {
-
-        forensicDetails.innerHTML = `
-
-            <strong>File</strong>:
-            ${escapeHTML(file.name)}
-
-            <br>
-
-            <strong>Type</strong>:
-            ${escapeHTML(
-                file.type ||
-                "Video"
-            )}
-
-            <br>
-
-            <strong>Size</strong>:
-            ${formatBytes(file.size)}
-
-            <br><br>
-
-            ${escapeHTML(
-                forensic.note
-            )}
-
-        `;
-
-    }
-
-}
-
-
-/* =========================================================
-   IMAGE / VIDEO HELPERS
-   ========================================================= */
-
-function isImageExtension(
-    filename
-) {
-
-    return [
-        "jpg",
-        "jpeg",
-        "png",
-        "webp",
-        "gif"
-    ].includes(
-        filename
-            .split(".")
-            .pop()
-            .toLowerCase()
-    );
-
-}
-
-
-function isVideoExtension(
-    filename
-) {
-
-    return [
-        "mp4",
-        "webm",
-        "mov",
-        "avi"
-    ].includes(
-        filename
-            .split(".")
-            .pop()
-            .toLowerCase()
-    );
-
-}
-
-
-/* =========================================================
-   UI
-   ========================================================= */
-
-function setIndicator(
-    id,
-    value
-) {
-
-    const element =
-        document.getElementById(id);
-
-
-    if (element) {
-
-        element.textContent =
-            value;
-
-    }
-
-}
-
-
-function calculateAspect(
-    width,
-    height
-) {
-
-    if (!height) {
-        return "Unknown";
-    }
-
-
-    return (
-        width / height
-    ).toFixed(2);
-
-}
-
-
-function classifyEdge(
-    value
-) {
-
-    if (value < 1.5) {
-        return "Low";
-    }
-
-
-    if (value < 4) {
-        return "Normal";
-    }
-
-
-    return "High";
-
-}
-
-
-function classifyNoise(
-    value
-) {
-
-    if (value < 1) {
-        return "Low";
-    }
-
-
-    if (value < 4) {
-        return "Normal";
-    }
-
-
-    return "High";
-
-}
-
-
-function classifyCompression(
-    value
-) {
-
-    if (value < 3) {
-        return "Low";
-    }
-
-
-    if (value < 8) {
-        return "Moderate";
-    }
-
-
-    return "Strong";
-
-}
-
-
-function classifyColor(
-    value
-) {
-
-    if (value < 15) {
-        return "Balanced";
-    }
-
-
-    if (value < 35) {
-        return "Moderate Bias";
-    }
-
-
-    return "Strong Channel Bias";
-
-}
-
-
-function updateAIStatus(
-    text
-) {
-
-    console.log(
-        "AI status:",
-        text
-    );
-
-}
-
-
-/* =========================================================
-   IMAGE LOADER
-   ========================================================= */
-
-function loadImage(
-    file
-) {
-
-    return new Promise(
-        function (resolve, reject) {
-
-            const url =
-                URL.createObjectURL(
-                    file
-                );
-
-
-            const image =
-                new Image();
-
-
-            image.onload =
-                function () {
-
-                    URL.revokeObjectURL(
-                        url
-                    );
-
-
-                    resolve(
-                        image
-                    );
-
-                };
-
-
-            image.onerror =
-                function () {
-
-                    URL.revokeObjectURL(
-                        url
-                    );
-
-
-                    reject(
-                        new Error(
-                            "Unable to read image."
-                        )
-                    );
-
-                };
-
-
-            image.src =
-                url;
-
-        }
-    );
-
-}
-
-
-/* =========================================================
-   ERROR
-   ========================================================= */
-
-function showFileError(
-    message
-) {
-
-    if (!fileSelected) {
-
-        alert(message);
 
         return;
-
     }
 
+    const m =
+        forensic.metrics;
 
-    fileSelected.classList.add(
-        "file-selected"
-    );
+    forensicDetails.innerHTML = `
+        <p>
+            <strong>File:</strong>
+            ${escapeHTML(file.name)}
+        </p>
 
+        <p>
+            <strong>Type:</strong>
+            ${escapeHTML(file.type || "image")}
+        </p>
 
-    fileSelected.innerHTML = `
+        <p>
+            <strong>Size:</strong>
+            ${formatBytes(file.size)}
+        </p>
 
-        <strong style="color:#ff7b7b">
+        <p>
+            <strong>Resolution:</strong>
+            ${forensic.width} × ${forensic.height}
+        </p>
 
-            ⚠️
-            ${escapeHTML(message)}
+        ${aiSection}
 
-        </strong>
+        <h4>Pixel Forensics</h4>
 
+        <p>
+            <strong>Luminance Mean:</strong>
+            ${m.meanLuma.toFixed(2)}
+        </p>
+
+        <p>
+            <strong>Luminance Std:</strong>
+            ${m.lumaStd.toFixed(2)}
+        </p>
+
+        <p>
+            <strong>Saturation:</strong>
+            ${(m.saturationMean * 100).toFixed(2)}%
+        </p>
+
+        <p>
+            <strong>Entropy:</strong>
+            ${m.entropy.toFixed(3)}
+        </p>
+
+        <p>
+            <strong>Edge Strength:</strong>
+            ${m.edgeStrength.toFixed(3)}
+        </p>
+
+        <p>
+            <strong>Noise Level:</strong>
+            ${m.noiseLevel.toFixed(3)}
+        </p>
+
+        <p>
+            <strong>Blockiness:</strong>
+            ${m.blockiness.toFixed(2)}
+        </p>
+
+        <p>
+            <strong>Channel Deviation:</strong>
+            ${m.channelDeviation.toFixed(2)}
+        </p>
+
+        <p>
+            <strong>Histogram Range:</strong>
+            ${Math.round(m.histogramRange)}
+        </p>
+
+        <p>
+            <strong>Forensic Anomaly Score:</strong>
+            ${forensic.score}%
+        </p>
+
+        <p class="forensic-disclaimer">
+            ⚠️ AI classification and forensic indicators
+            are analytical signals, not definitive proof
+            of manipulation. Results may vary depending
+            on image quality, compression, source and
+            model generalization.
+        </p>
     `;
-
 }
 
 
 /* =========================================================
-   UTILITIES
+   Main Analysis
    ========================================================= */
 
-function formatBytes(
-    bytes
-) {
+async function analyzeSelectedFile() {
 
-    if (!bytes) {
-        return "0 B";
+    if (!selectedFile) {
+        return;
     }
 
+    if (scanButton) {
+        scanButton.disabled = true;
+        scanButton.textContent =
+            "⏳ Analyzing...";
+    }
 
-    const units = [
-        "B",
-        "KB",
-        "MB",
-        "GB"
-    ];
+    if (resultEmpty) {
+        resultEmpty.style.display = "none";
+    }
 
+    if (analysisResult) {
+        analysisResult.style.display = "block";
+    }
 
-    const index =
-        Math.min(
-            units.length - 1,
-            Math.floor(
-                Math.log(bytes) /
-                Math.log(1024)
-            )
+    showProgress(true);
+    resetProgress();
+
+    /*
+       Step 1 — File
+    */
+
+    setProgressStep(
+        progressLoad,
+        "completed"
+    );
+
+    /*
+       Step 2 — AI
+    */
+
+    setProgressStep(
+        progressAI,
+        "active"
+    );
+
+    let aiResult = null;
+
+    if (isImage(selectedFile)) {
+
+        try {
+
+            aiResult =
+                await runAIAnalysis(
+                    selectedFile
+                );
+
+        } catch (error) {
+
+            console.error(
+                "AI analysis error:",
+                error
+            );
+
+            aiResult = null;
+
+            updateModelStatus(
+                "AI Analysis Error",
+                "error"
+            );
+        }
+
+    } else {
+
+        updateModelStatus(
+            "Image Model — Video Pending",
+            "loading"
+        );
+    }
+
+    setProgressStep(
+        progressAI,
+        "completed"
+    );
+
+    /*
+       Step 3 — Forensics
+    */
+
+    setProgressStep(
+        progressForensics,
+        "active"
+    );
+
+    let forensicResult;
+
+    try {
+
+        forensicResult =
+            await runImageForensics(
+                selectedFile
+            );
+
+    } catch (error) {
+
+        console.error(
+            "Forensic analysis error:",
+            error
         );
 
+        forensicResult = {
+            type: "unknown",
+            score: 0,
+            metrics: null
+        };
+    }
 
-    return (
+    setProgressStep(
+        progressForensics,
+        "completed"
+    );
 
-        bytes /
-        Math.pow(
-            1024,
-            index
-        )
+    /*
+       Step 4 — Report
+    */
 
-    ).toFixed(2)
-    + " "
-    + units[index];
+    setProgressStep(
+        progressReport,
+        "active"
+    );
 
-}
+    displayAIResults(
+        aiResult
+    );
 
+    displayIndicators(
+        selectedFile,
+        forensicResult
+    );
 
-function escapeHTML(
-    value
-) {
-
-    return String(value)
-
-        .replaceAll(
-            "&",
-            "&amp;"
-        )
-
-        .replaceAll(
-            "<",
-            "&lt;"
-        )
-
-        .replaceAll(
-            ">",
-            "&gt;"
-        )
-
-        .replaceAll(
-            '"',
-            "&quot;"
-        )
-
-        .replaceAll(
-            "'",
-            "&#039;"
+    const assessment =
+        calculateAssessment(
+            aiResult,
+            forensicResult.score
         );
 
+    setText(
+        scoreElement,
+        `${forensicResult.score}%`
+    );
+
+    setText(
+        riskLevel,
+        assessment.label
+    );
+
+    if (riskLevel) {
+
+        riskLevel.classList.remove(
+            "high",
+            "medium",
+            "low"
+        );
+
+        riskLevel.classList.add(
+            assessment.className
+        );
+    }
+
+    displayForensicDetails(
+        selectedFile,
+        forensicResult,
+        aiResult
+    );
+
+    setProgressStep(
+        progressReport,
+        "completed"
+    );
+
+    if (scanButton) {
+
+        scanButton.disabled = false;
+
+        scanButton.textContent =
+            "🧠 Analyze Again";
+    }
+
+    /*
+       Keep model status accurate.
+    */
+
+    if (aiResult) {
+
+        updateModelStatus(
+            "AI Model Ready",
+            "ready"
+        );
+    }
+
+    console.log(
+        "DeepShield analysis completed",
+        {
+            file: selectedFile.name,
+            ai: aiResult,
+            forensics: forensicResult
+        }
+    );
 }
 
 
 /* =========================================================
-   DEBUG API
+   Scan Button
+   ========================================================= */
+
+function setupScanButton() {
+
+    if (!scanButton) {
+        return;
+    }
+
+    scanButton.addEventListener(
+        "click",
+        analyzeSelectedFile
+    );
+
+    scanButton.disabled = true;
+}
+
+
+/* =========================================================
+   Global Drag Protection
+   =========================================================
+
+   Important:
+   Do NOT prevent all document drops.
+   We only protect the browser when the user drops
+   outside our actual drop zone.
+   ========================================================= */
+
+function setupGlobalDragProtection() {
+
+    document.addEventListener(
+        "dragover",
+        event => {
+
+            if (
+                dropZone &&
+                dropZone.contains(
+                    event.target
+                )
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+        }
+    );
+
+    document.addEventListener(
+        "drop",
+        event => {
+
+            if (
+                dropZone &&
+                dropZone.contains(
+                    event.target
+                )
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+        }
+    );
+}
+
+
+/* =========================================================
+   Initialization
+   ========================================================= */
+
+async function initializeDeepShield() {
+
+    console.log(
+        "DeepShield AI initializing..."
+    );
+
+    setupFileInput();
+    setupDragAndDrop();
+    setupScanButton();
+    setupGlobalDragProtection();
+
+    updateModelStatus(
+        "Loading AI Model...",
+        "loading"
+    );
+
+    /*
+       Load the model in the background.
+       The user does not need to wait before
+       selecting a file.
+    */
+
+    loadAIModel();
+
+    console.log(
+        "DeepShield AI initialized."
+    );
+}
+
+
+/* =========================================================
+   Debug API
    ========================================================= */
 
 window.DeepShield = {
 
-    getSelectedFile() {
+    getSelectedFile: () =>
+        selectedFile,
 
-        return selectedFile;
+    getModel: () =>
+        aiClassifier,
 
-    },
+    getModelStatus: () =>
+        ({
+            loaded: !!aiClassifier,
+            loading: aiLoading,
+            error: aiError
+        }),
 
+    analyze: analyzeSelectedFile,
 
-    getAIStatus() {
-
-        return {
-
-            loaded:
-                !!aiClassifier,
-
-            loading:
-                aiLoading,
-
-            model:
-                CONFIG.MODEL_ID
-
-        };
-
-    },
-
-
-    reloadAI() {
+    reloadModel: async () => {
 
         aiClassifier = null;
+        aiError = null;
 
-        return loadAIModel();
-
+        await loadAIModel();
     }
-
 };
 
 
 /* =========================================================
-   START
+   Start
    ========================================================= */
 
-/*
-   Because this script is loaded at the bottom
-   of index.html, the DOM already exists.
-*/
-
 initializeDeepShield();
-
-
-console.log(
-    "DeepShield AI v0.7 loaded successfully."
-);
