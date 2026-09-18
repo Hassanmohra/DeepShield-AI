@@ -290,6 +290,76 @@
             box-shadow: 0 14px 35px rgba(0, 188, 217, 0.16);
         }
 
+        .scan-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* AI STATUS */
+
+        .ai-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 14px;
+            padding: 11px 13px;
+            border-radius: 12px;
+            background: rgba(0, 255, 170, 0.035);
+            border: 1px solid rgba(0, 255, 170, 0.09);
+            color: #91a2bd;
+            font-size: 11px;
+        }
+
+        .ai-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #38f5a6;
+            box-shadow: 0 0 10px #38f5a6;
+            flex-shrink: 0;
+        }
+
+        /* ANALYSIS PROGRESS */
+
+        .analysis-progress {
+            display: none;
+            margin-top: 16px;
+            padding: 15px;
+            border-radius: 14px;
+            background: rgba(99,102,241,0.045);
+            border: 1px solid rgba(99,102,241,0.10);
+        }
+
+        .analysis-progress.active {
+            display: block;
+        }
+
+        .progress-title {
+            color: #aeb9d0;
+            font-size: 11px;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            color: #66758f;
+            font-size: 10px;
+            margin-top: 7px;
+        }
+
+        .progress-step.active {
+            color: #8cecff;
+        }
+
+        .progress-step.done {
+            color: #72ffc7;
+        }
+
         /* RESULTS */
 
         .result-empty {
@@ -385,6 +455,57 @@
             font-size: 19px;
             font-weight: 900;
             color: #e8f0ff;
+        }
+
+        /* AI CLASSIFICATION */
+
+        .classification-card {
+            margin-top: 14px;
+            padding: 17px 19px;
+            border-radius: 17px;
+            border: 1px solid rgba(141,150,255,0.10);
+            background: rgba(141,150,255,0.035);
+        }
+
+        .classification-label {
+            color: #7e8ca5;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        #aiClassification {
+            color: #aeb6ff;
+            font-size: 18px;
+            font-weight: 900;
+        }
+
+        .probability-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .probability {
+            padding: 12px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .probability span:first-child {
+            display: block;
+            color: #687792;
+            font-size: 10px;
+            margin-bottom: 5px;
+        }
+
+        .probability span:last-child {
+            color: #dbe4f5;
+            font-size: 16px;
+            font-weight: 900;
         }
 
         .section-title {
@@ -517,6 +638,10 @@
                 grid-template-columns: 1fr;
             }
 
+            .probability-row {
+                grid-template-columns: 1fr;
+            }
+
             .card {
                 padding: 20px;
             }
@@ -633,6 +758,60 @@
                 🧠 Start AI Analysis
             </button>
 
+            <!-- AI STATUS -->
+
+            <div class="ai-status">
+                <span class="ai-status-dot"></span>
+
+                <span>
+                    AI Model:
+                    <strong id="modelStatus">
+                        Ready for analysis
+                    </strong>
+                </span>
+            </div>
+
+            <!-- ANALYSIS PROGRESS -->
+
+            <div
+                class="analysis-progress"
+                id="analysisProgress"
+            >
+
+                <div class="progress-title">
+                    Analysis Pipeline
+                </div>
+
+                <div
+                    class="progress-step"
+                    id="progressLoad"
+                >
+                    ⏳ Preparing media
+                </div>
+
+                <div
+                    class="progress-step"
+                    id="progressAI"
+                >
+                    🧠 Running AI detection
+                </div>
+
+                <div
+                    class="progress-step"
+                    id="progressForensics"
+                >
+                    🔬 Running pixel forensics
+                </div>
+
+                <div
+                    class="progress-step"
+                    id="progressReport"
+                >
+                    📊 Generating forensic report
+                </div>
+
+            </div>
+
         </div>
 
 
@@ -645,7 +824,7 @@
             </div>
 
             <div class="card-subtitle">
-                Analysis results and media integrity indicators.
+                AI detection results and digital media integrity indicators.
             </div>
 
 
@@ -691,7 +870,7 @@
                         </div>
 
                         <div class="metric-note">
-                            AI model connected and ready
+                            Trained deepfake classification model
                         </div>
 
                     </div>
@@ -714,6 +893,45 @@
 
                         <div class="metric-note">
                             Browser-based forensic heuristics
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- AI CLASSIFICATION -->
+
+                <div class="classification-card">
+
+                    <div class="classification-label">
+                        AI Classification
+                    </div>
+
+                    <div id="aiClassification">
+                        Pending
+                    </div>
+
+                    <div class="probability-row">
+
+                        <div class="probability">
+                            <span>
+                                Deepfake Probability
+                            </span>
+
+                            <span id="deepfakeProbability">
+                                —
+                            </span>
+                        </div>
+
+                        <div class="probability">
+                            <span>
+                                Realism Probability
+                            </span>
+
+                            <span id="realismProbability">
+                                —
+                            </span>
                         </div>
 
                     </div>
@@ -900,10 +1118,10 @@
                 <!-- DISCLAIMER -->
 
                 <div class="disclaimer">
-                    ⚠️ Heuristic forensic analysis only.
-                    This result is not a definitive deepfake verdict.
-                    A trained AI model will be integrated in the next
-                    development stage.
+                    ⚠️ AI classification and forensic indicators are
+                    analytical signals, not definitive proof of manipulation.
+                    Results may vary depending on image quality,
+                    compression, source and model generalization.
                 </div>
 
             </div>
@@ -928,8 +1146,8 @@
             </h3>
 
             <p>
-                Designed for future integration with trained deepfake
-                detection models and machine-learning inference.
+                Uses a trained image classification model to estimate
+                deepfake-related patterns in supported images.
             </p>
 
         </div>
@@ -964,8 +1182,8 @@
             </h3>
 
             <p>
-                Browser-side analysis keeps the current forensic
-                processing local without automatically uploading media.
+                Current image analysis runs in the browser without
+                automatically uploading the selected media to a server.
             </p>
 
         </div>
@@ -981,5 +1199,6 @@
 
 
 <script src="js/app.js"></script>
+
 </body>
 </html>
